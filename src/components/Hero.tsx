@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import heroImage from "@/assets/hero-beads.png";
+import heroImage from "@/assets/beads-background.jpg";
 import React from "react";
 import { supabase } from "../helper/supabaseClient";
 
@@ -60,7 +60,7 @@ const Hero = () => {
           Little Loops
         </h1>
         <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-          Premium crafted beaded necklaces.
+          Handcrafted beaded necklaces.
         </p>
         <p className="text-xl md:text-lg text-muted-foreground mb-8 max-w-full md:max-w-2xl mx-auto">
           This website is currently under construction. In the meantime, please join our newsletter to be notified when we launch!
@@ -84,7 +84,7 @@ const Hero = () => {
           </Button>
         </form>
 
-        <p className={`mt-4 ${(message === "Something went wrong. Please try again." || message === "Please enter a valid email address." || message === "This email is already signed up.") ? "text-red-600" : "var(--sage-green)"}`}>
+        <p className={`mt-4 ${(message === "Something went wrong. Please try again." || message === "Please enter a valid email address." || message === "This email is already signed up.") ? "text-red-600" : "var(--accent)"}`}>
     {message}
   </p>
       </div>

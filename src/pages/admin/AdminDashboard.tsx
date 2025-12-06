@@ -14,12 +14,12 @@ const AdminDashboard = () => {
         </Link>
 
         <Link
-          to="/admin/edit-item"
+          to="/admin/AdminItemOverview"
           className="bg-secondary text-secondary-foreground py-4 px-6 rounded-lg text-center font-medium hover:bg-secondary/90 transition"
         >
           Edit Existing Item
         </Link>
-
+        
         {/* Placeholder for future admin buttons */}
         <button
           className="bg-gray-300 text-gray-800 py-4 px-6 rounded-lg text-center font-medium cursor-not-allowed"

@@ -72,7 +72,7 @@ const BeadsPage = () => {
   const getTypeColor = (type: string) => {
     switch (type) {
       case "Glass":
-        return "bg-sage-green text-primary-foreground";
+        return "bg-light-blue text-primary-foreground";
       case "Ceramic":
         return "bg-dusty-rose text-primary-foreground";
       case "Wood":

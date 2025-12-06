@@ -142,11 +142,11 @@ const Footer = () => {
                 className={`mt-2 ${
                   (message === "Something went wrong. Please try again." || message === "Please enter a valid email address." || message === "This email is already signed up.")
                     ? "text-red-600"
-                    : "var(--sage-green)"
+                    : "var(--accent)"
                 }`}
               >
                 {message}
-              </p>
+              </p>  
             )}
           </div>
         </div>

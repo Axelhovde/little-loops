@@ -15,6 +15,11 @@ import ProfilePage from "./pages/ProfilePage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminAddItem from "./pages/admin/AdminAddItem";
 import ItemPage from "./pages/ItemPage";
+import AdminItemOverview from "./pages/admin/AdminItemOverview";
+import AdminUpdateItem from "./pages/admin/AdminUpdateItem";
+import "@fontsource/poppins/400.css";
+import "@fontsource/poppins/500.css";
+import "@fontsource/poppins/600.css";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +82,23 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/AdminItemOverview"
+              element={
+                <ProtectedRoute>
+                  <AdminItemOverview />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/AdminUpdateItem/:id"
+              element={
+                <ProtectedRoute>
+                  <AdminUpdateItem />
+                </ProtectedRoute>
+              }
+            />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

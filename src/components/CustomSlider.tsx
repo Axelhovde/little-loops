@@ -1,10 +1,9 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import "swiper/css";
 import "swiper/css/navigation";
-import { Navigation } from 'swiper/modules';
-
+import { Navigation } from "swiper/modules";
 
 type CustomSwiperProps = {
   photos: string[];
@@ -14,10 +13,24 @@ type CustomSwiperProps = {
 const CustomSwiper = ({ photos, title }: CustomSwiperProps) => {
   const swiperRef = useRef<any>(null);
 
+  const [isBeginning, setIsBeginning] = useState(true);
+  const [isEnd, setIsEnd] = useState(false);
+
+  const updatePosition = () => {
+    if (!swiperRef.current) return;
+    setIsBeginning(swiperRef.current.isBeginning);
+    setIsEnd(swiperRef.current.isEnd);
+  };
+
   return (
     <div className="relative">
       <Swiper
-        onSwiper={(s) => (swiperRef.current = s)}
+        modules={[Navigation]}
+        onSwiper={(s) => {
+          swiperRef.current = s;
+          updatePosition();
+        }}
+        onSlideChange={updatePosition}
         slidesPerView={1}
         spaceBetween={10}
       >
@@ -33,39 +46,43 @@ const CustomSwiper = ({ photos, title }: CustomSwiperProps) => {
         ))}
       </Swiper>
 
-      {/* Prev */}
-      <button
-        type="button"
-        aria-label="Previous slide"
-        className="absolute left-2 top-1/2 -translate-y-1/2 z-10
-                   cursor-pointer flex items-center justify-center
-                   w-10 h-10 bg-transparent"
-        onClick={(e) => {
-          e.stopPropagation();
-          swiperRef.current?.slidePrev();
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-      >
-        <ChevronLeft size={30} className="pointer-events-none" />
-      </button>
+      {/* Prev Button */}
+      {!isBeginning && (
+        <button
+          type="button"
+          aria-label="Previous slide"
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-10
+                     cursor-pointer flex items-center justify-center
+                     w-10 h-10 bg-transparent"
+          onClick={(e) => {
+            e.stopPropagation();
+            swiperRef.current?.slidePrev();
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <ChevronLeft size={30} className="pointer-events-none" />
+        </button>
+      )}
 
-      {/* Next */}
-      <button
-        type="button"
-        aria-label="Next slide"
-        className="absolute right-2 top-1/2 -translate-y-1/2 z-10
-                   cursor-pointer flex items-center justify-center
-                   w-10 h-10 bg-transparent"
-        onClick={(e) => {
-          e.stopPropagation();
-          swiperRef.current?.slideNext();
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-      >
-        <ChevronRight size={30} className="pointer-events-none" />
-      </button>
+      {/* Next Button */}
+      {!isEnd && (
+        <button
+          type="button"
+          aria-label="Next slide"
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-10
+                     cursor-pointer flex items-center justify-center
+                     w-10 h-10 bg-transparent"
+          onClick={(e) => {
+            e.stopPropagation();
+            swiperRef.current?.slideNext();
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <ChevronRight size={30} className="pointer-events-none" />
+        </button>
+      )}
     </div>
   );
 };

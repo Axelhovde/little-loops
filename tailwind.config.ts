@@ -54,7 +54,7 @@ export default {
 				},
 				// Custom colors for Little Loops
 				'warm-cream': 'hsl(var(--warm-cream))',
-				'sage-green': 'hsl(var(--sage-green))',
+				'light-blue': 'hsl(var(--light-blue))',
 				'dusty-rose': 'hsl(var(--dusty-rose))',
 				'terracotta': 'hsl(var(--terracotta))',
 				'soft-brown': 'hsl(var(--soft-brown))',
@@ -87,7 +87,7 @@ export default {
 			},
 			fontFamily: {
 				'serif': ['Georgia', 'serif'],
-				'sans': ['Inter', 'system-ui', 'sans-serif']
+				'sans': ['Poppins', 'system-ui', 'sans-serif'],
 			},
 			keyframes: {
 				'accordion-down': {

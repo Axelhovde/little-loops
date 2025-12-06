@@ -2,9 +2,9 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heart, Scissors, Palette } from "lucide-react";
-import backgroundImage from "@/assets/hero-beads.png";
+import backgroundImage from "@/assets/beads-background.jpg";
 import natalieImage from "@/assets/nataliePhoto2.jpeg";
-import beadImage from "@/assets/beadsPhoto.jpg";
+import beadImage from "@/assets/about-me-beads.jpg";
 
 const AboutPage = () => {
   return (
@@ -67,62 +67,8 @@ const AboutPage = () => {
 </section>
 
 
-      {/* Values Section */}
-      {/* 
-      <section className="py-20 px-4 bg-secondary/30">
-        <div className="container mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-serif font-bold text-primary mb-6">
-              My Values
-            </h2>
-          </div>
+      {/*  */}
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="text-center shadow-soft">
-              <CardContent className="p-8">
-                <div className="w-16 h-16 bg-sage-green rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Heart className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <h3 className="text-xl font-serif font-bold text-primary mb-4">
-                  Crafted with Love
-                </h3>
-                <p className="text-muted-foreground">
-                  Every bead we select is chosen with care and attention to detail, ensuring quality that you can feel in every piece.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center shadow-soft">
-              <CardContent className="p-8">
-                <div className="w-16 h-16 bg-dusty-rose rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Scissors className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <h3 className="text-xl font-serif font-bold text-primary mb-4">
-                  Skill Building
-                </h3>
-                <p className="text-muted-foreground">
-                  We create patterns and tutorials that help crafters grow their skills, from first stitches to intricate masterpieces.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="text-center shadow-soft">
-              <CardContent className="p-8">
-                <div className="w-16 h-16 bg-terracotta rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Palette className="h-8 w-8 text-primary-foreground" />
-                </div>
-                <h3 className="text-xl font-serif font-bold text-primary mb-4">
-                  Creative Expression
-                </h3>
-                <p className="text-muted-foreground">
-                  We believe in the power of creativity to bring joy, build confidence, and connect people through the shared language of handmade beauty.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
- */}
       {/* Team Section */}
     <section className="md:py-20  flex flex-col md:flex-row items-center md:items-start gap-12 md:gap-20">
       <div className="container mx-auto max-w-6xl flex flex-col md:flex-row items-center md:items-start gap-12 md:gap-20 px-4">

@@ -1,147 +1,164 @@
+// src/pages/ItemPage.tsx
 import SiteNavigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { supabase } from "../helper/supabaseClient";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Swiper, SwiperSlide } from "swiper/react";
 import "swiper/css";
 import "swiper/css/navigation";
-import { Navigation } from "swiper/modules";
+import CustomSwiper from "@/components/customSwiper";
+import ColorSwatches from "@/components/colorSwatches";
+import { getItemFull } from "@/services/items.service";
+import type {
+  ItemColor as ProjectItemColor,
+  ItemPhoto as ProjectItemPhoto,
+} from "@/interfaces/types";
 
-type Item = {
+/**
+ * If your project doesn't export ItemColor / ItemPhoto from "@/interfaces/types",
+ * change the import above to match where you define those interfaces.
+ *
+ * The rest of the file assumes:
+ * ProjectItemColor = { id: number; name: string; hex?: string; photos: ProjectItemPhoto[] }
+ * ProjectItemPhoto = { photo_id: number; item_color_id: number; photo_url: string }
+ */
+
+type LocalItem = {
   id: number;
   title: string;
   description: string;
   price: string;
-  rating: number;
-  reviews: number;
-  photos: string[];
-};
-
-type CustomSwiperProps = {
-  photos: string[];
-  title: string;
-};
-
-const CustomSwiper = ({ photos, title }: CustomSwiperProps) => {
-  const prevRef = useRef<HTMLDivElement>(null);
-  const nextRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <div className="relative">
-      <Swiper
-        modules={[Navigation]}
-        onBeforeInit={(swiper) => {
-          // @ts-ignore
-          swiper.params.navigation.prevEl = prevRef.current;
-          // @ts-ignore
-          swiper.params.navigation.nextEl = nextRef.current;
-        }}
-        slidesPerView={1}
-        spaceBetween={10}
-        className="rounded-xl overflow-hidden shadow-lg"
-      >
-        {photos.map((photo, index) => (
-          <SwiperSlide key={index}>
-            <img
-              src={photo}
-              alt={title}
-              className="w-full h-[500px] object-cover transition-transform duration-500 hover:scale-105"
-            />
-          </SwiperSlide>
-        ))}
-      </Swiper>
-
-      <div
-        ref={prevRef}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-background rounded-full shadow-md cursor-pointer hover:bg-primary/10 transition"
-      >
-        <ChevronLeft size={28} />
-      </div>
-      <div
-        ref={nextRef}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-background rounded-full shadow-md cursor-pointer hover:bg-primary/10 transition"
-      >
-        <ChevronRight size={28} />
-      </div>
-    </div>
-  );
+  photos: ProjectItemPhoto[]; // all photos (we'll filter by color for display)
+  colors: ProjectItemColor[];  // color variants (with photos array inside)
 };
 
 const ItemPage = () => {
   const { id } = useParams<{ id: string }>();
-  const [item, setItem] = useState<Item | null>(null);
+  const [item, setItem] = useState<LocalItem | null>(null);
+  const [selectedColor, setSelectedColor] = useState<ProjectItemColor | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
 
-    const fetchItem = async () => {
-      const { data: itemsData } = await supabase
-        .from("items")
-        .select("*")
-        .eq("item_id", id)
-        .single();
+    const load = async () => {
+      try {
+        const itemData = await getItemFull(Number(id));
+        // itemData contains: item, itemColors, photos (raw supabase rows)
+        // Map itemColors -> ProjectItemColor, ensure each has a photos array
+        const mappedColors: ProjectItemColor[] = (itemData.itemColors || []).map((ic: any) => {
+          const photosForThisVariant: ProjectItemPhoto[] = (itemData.photos || [])
+            .filter((p: any) => p.item_color_id === ic.item_color_id)
+            .map((p: any) => ({
+              photo_id: p.photo_id,
+              item_color_id: p.item_color_id,
+              photo_url: p.photo_url,
+            }));
 
-      const { data: photosData } = await supabase
-        .from("item_photos")
-        .select("*")
-        .eq("item_id", id);
-
-      if (itemsData) {
-        setItem({
-          id: itemsData.id,
-          title: itemsData.title,
-          description: itemsData.description,
-          price: itemsData.price,
-          rating: itemsData.rating ?? 0,
-          reviews: itemsData.reviews ?? 0,
-          photos: photosData?.map((p: any) => p.photo_url) || [],
+          return {
+            id: ic.item_color_id, // match your project's ItemColor.id
+            name: ic.colors?.color_name ?? "",
+            hex: ic.colors?.color_hex ?? undefined,
+            photos: photosForThisVariant,
+          } as ProjectItemColor;
         });
+
+        // Map all photos to a common shape
+        const mappedPhotos: ProjectItemPhoto[] = (itemData.photos || []).map((p: any) => ({
+          photo_id: p.photo_id,
+          item_color_id: p.item_color_id,
+          photo_url: p.photo_url,
+        }));
+
+        const fullItem: LocalItem = {
+          id: itemData.item.item_id,
+          title: itemData.item.item_name,
+          description: itemData.item.description,
+          price: itemData.item.price,
+          photos: mappedPhotos,
+          colors: mappedColors,
+        };
+
+        setItem(fullItem);
+        if (mappedColors.length > 0) setSelectedColor(mappedColors[0]);
+      } catch (err) {
+        console.error("Error loading item:", err);
       }
     };
 
-    fetchItem();
+    load();
   }, [id]);
 
   if (!item) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
+  // The photos we want to display in the swiper are the photos for the selected color.
+  const displayedPhotos = selectedColor?.photos ?? [];
+
+  const sizes = ["S", "M", "L", "One-Size"];
+
   return (
-    <div className="min-h-screen bg-background text-primary">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteNavigation />
 
       <div className="container mx-auto py-16 px-4 lg:px-24">
         <div className="grid lg:grid-cols-2 gap-12 items-start">
           {/* Left: Product Images */}
-          <CustomSwiper photos={item.photos} title={item.title} />
+          {/* CustomSwiper is given only the photos array and title */}
+          <CustomSwiper photos={displayedPhotos.map((p) => p.photo_url)} title={item.title} />
 
           {/* Right: Product Info */}
           <div className="flex flex-col gap-6">
-            <h1 className="text-5xl font-bold">{item.title}</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-xl font-semibold">{item.price}</span>
-              <span className="text-sm text-muted-foreground">
-                {item.rating.toFixed(1)} ⭐ ({item.reviews} reviews)
-              </span>
+            <h1 className="text-4xl md:text-5xl font-bold">{item.title}</h1>
+
+            {/* Top controls: colors + sizes (placed near top) */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-2">
+              <div>
+                <span className="text-xl">{item.price}kr</span>
+              </div>
+
+              <div className="flex items-center gap-6">
+                {/* Color Swatches */}
+                {item.colors.length > 0 && (
+                  <ColorSwatches
+                    colors={item.colors}
+                    selectedColor={selectedColor as ProjectItemColor}
+                    onSelect={(c) => {
+                      // wrap setSelectedColor to ensure exact param type
+                      setSelectedColor(c);
+                    }}
+                  />
+                )}
+
+                {/* Size selector (compact) */}
+                <div className="flex gap-2 items-center">
+                  {sizes.map((size) => {
+                    const isSelected = selectedSize === size;
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setSelectedSize(isSelected ? null : size)}
+                        className={`px-3 py-1 rounded border text-sm transition ${
+                          isSelected
+                            ? "bg-primary text-background border-primary"
+                            : "bg-background text-foreground border-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            <p className="text-lg leading-relaxed text-muted-foreground">{item.description}</p>
+            {/* Description */}
+            <p className="mt-6 text-base md:text-lg leading-relaxed text-muted-foreground">
+              {item.description}
+            </p>
 
-            <button className="mt-4 bg-primary text-background font-semibold py-3 px-6 rounded-lg shadow-lg hover:bg-primary/90 transition">
+            <button className="mt-6 bg-primary text-background font-semibold py-3 px-6 rounded-lg hover:bg-primary/90 transition w-full md:w-auto">
               Add to Cart
             </button>
-
-            <div className="mt-6 flex flex-wrap gap-4">
-              <div className="p-2 border border-muted-foreground rounded-lg cursor-pointer hover:bg-primary/10 transition">
-                Size: S
-              </div>
-              <div className="p-2 border border-muted-foreground rounded-lg cursor-pointer hover:bg-primary/10 transition">
-                Size: M
-              </div>
-              <div className="p-2 border border-muted-foreground rounded-lg cursor-pointer hover:bg-primary/10 transition">
-                Size: L
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -31,7 +31,7 @@
     --muted-foreground: 20 8% 55%;
 
     /* Accent - soft terracotta */
-    --accent: 25 35% 75%;
+    --accent: 205 41% 64.7%;
     --accent-foreground: 20 10% 15%;
 
     /* Destructive */
@@ -48,17 +48,17 @@
 
     /* Custom design tokens */
     --warm-cream: 30 30% 98%;
-    --sage-green: 205 41% 64.7%;
+    --light-blue: 205 41% 64.7%;
     --dusty-rose: 15 25% 75%;
     --terracotta: 25 35% 65%;
     --soft-brown: 30 15% 60%;
     
     /* Gradients */
     --gradient-warm: linear-gradient(135deg, hsl(var(--warm-cream)), hsl(30 20% 95%));
-    --gradient-sage: linear-gradient(135deg, hsl(var(--sage-green)), hsl(95 30% 55%));
+    --gradient-sage: linear-gradient(135deg, hsl(var(--light-blue)), hsl(95 30% 55%));
     
     /* Shadows */
-    --shadow-soft: 0 4px 20px -4px hsl(var(--sage-green) / 0.15);
+    --shadow-soft: 0 4px 20px -4px hsl(var(--light-blue) / 0.15);
     --shadow-warm: 0 8px 32px -8px hsl(var(--terracotta) / 0.2);
 
     /* Transitions */

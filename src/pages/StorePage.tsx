@@ -1,19 +1,14 @@
 import SiteNavigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {  Heart, ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "../helper/supabaseClient";
-import { useEffect, useRef, useState } from "react";
-import { Swiper, SwiperSlide } from "swiper/react";
+import { useEffect, useState } from "react";
 import "swiper/css";
 import "swiper/css/navigation";
-import { Navigation, Pagination, Scrollbar, A11y } from 'swiper/modules';
 import { useNavigate } from "react-router-dom";
-import CustomSwiper from "../components/CustomSlider";
 import { Item } from "../interfaces/types";
 import ProductCard from "@/components/ProductCard";
+import { getStoreItems } from "@/services/store.service";
+
 
 
 const StorePage = () => {
@@ -21,100 +16,20 @@ const StorePage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-  const fetchItems = async () => {
-    // Fetch items
-    const { data: itemsData, error: itemsError } = await supabase
-      .from("items")
-      .select("*");
-    if (itemsError) {
-      console.error("Error fetching items:", itemsError);
-      return;
-    }
+  const load = async () => {
+    try {
+      const result = await getStoreItems();
+      setItems(result);
+    } catch (error) {
+      console.error("Error fetching store items:", error);
 
-    // Fetch photos
-    const { data: photosData, error: photoError } = await supabase
-      .from("item_photos")
-      .select("*");
-    if (photoError) {
-      console.error("Error fetching item photos:", photoError);
-      return;
-    }
-
-    console.log("Fetched photosData:", photosData);
-
-    // Fetch colors
-    const { data: colorsData, error: colorsError } = await supabase
-      .from("colors")
-      .select("*");
-    if (colorsError) {
-      console.error("Error fetching colors:", colorsError);
-      return;
-    }
-
-    // Fetch item_colors
-    const { data: itemColorsData, error: itemColorsError } = await supabase
-      .from("item_colors")
-      .select("*");
-    if (itemColorsError) {
-      console.error("Error fetching item colors:", itemColorsError);
-      return;
-    }
-
-    const formattedItems = itemsData?.map((item: any) => {
-        // find all item_color relations for this item
-        const relatedItemColors = itemColorsData?.filter(
-          (ic: any) => ic.item_id === item.item_id
-        ) || [];
-
-        console.log(`Item ${item.item_id} - relatedItemColors:`, relatedItemColors);
-
-        // map each related color into {id, name, photos}
-        const colors = relatedItemColors.map((ic: any) => {
-          const color = colorsData?.find((c: any) => c.color_id === ic.color_id);
-          const photos = photosData
-            ?.filter(
-              (p: any) =>
-                Number(p.item_id) === item.item_id &&
-                Number(p.item_color_id) === ic.item_color_id
-            )
-            .map((p: any) => p.photo_url) || [];
-          
-            console.log(
-      `Item ${item.item_id}, Color ${ic.color_id} (${color?.color_name}): photos`,
-      photos
-    );
-
-          return {
-            id: ic.color_id,
-            name: color?.color_name || "Unknown",
-            hex: color?.color_hex || "#ccc",
-            photos,
-          };
-        });
-
-
-        console.log(`Item ${item.item_id} final colors array:`, colors);
-
-        return {
-          id: item.item_id,
-          title: item.item_name,
-          description: item.description,
-          price: item.price,
-          rating: item.rating ?? 0,
-          reviews: item.reviews ?? 0,
-          colors,
-        };
-      });
-
-      setItems(formattedItems || []); 
-      }; 
-      fetchItems(); }, []);
-
-  const [selectedColors, setSelectedColors] = useState<{ [id: number]: number }>({});
+      }
+    };
+    load();
+  }, []);
   const onItemPressed = (itemId: number) => {
-  navigate(`/item/${itemId}`);
-};
-
+    navigate(`/item/${itemId}`);
+  };
 
 return (
     <div className="min-h-screen bg-background">
@@ -135,14 +50,16 @@ return (
       {/* Products Grid */}
       <section className="py-16 px-2">
         <div className="container mx-auto">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {items.map((item) => (
-              <ProductCard 
-                key={item.id} 
-                item={item} 
-                onItemPressed={onItemPressed} 
-              />
-            ))}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {items
+              .filter((item) => item.ishidden !== true)
+              .map((item) => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  onItemPressed={onItemPressed}
+                />
+              ))}
           </div>
         </div>
       </section>
