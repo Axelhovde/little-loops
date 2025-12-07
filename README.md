@@ -33,3 +33,11 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+
+
+## How to deploy the project?
+
+The project uses github pages, and require the following commands run from the main branch:
+
+- npm run build
+- npm run deploy
