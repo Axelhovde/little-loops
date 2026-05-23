@@ -53,7 +53,7 @@ const CustomSwiper = ({ photos, title }: CustomSwiperProps) => {
             <img
               src={photo}
               alt={title}
-              className="w-full h-[800px] object-cover transition-transform duration-500 hover:scale-105"
+              className="w-full h-[55vh] max-h-[560px] min-h-[300px] object-cover transition-transform duration-500 hover:scale-105"
             />
           </SwiperSlide>
         ))}

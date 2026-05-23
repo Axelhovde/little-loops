@@ -86,8 +86,8 @@ export default {
 				'smooth': 'var(--transition-smooth)'
 			},
 			fontFamily: {
-				'serif': ['Georgia', 'serif'],
-				'sans': ['Poppins', 'system-ui', 'sans-serif'],
+				'serif': ['Cormorant Garamond', 'Georgia', 'serif'],
+				'sans': ['DM Sans', 'system-ui', 'sans-serif'],
 			},
 			keyframes: {
 				'accordion-down': {

@@ -4,15 +4,29 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Item } from "../interfaces/types";
 import ColorSwatches from "@/components/colorSwatches";
+import { useCart } from "@/contexts/cartContext";
 
 const ProductCard = ({ item, onItemPressed }: { item: Item; onItemPressed: (id: number) => void }) => {
   const [selectedColor, setSelectedColor] = useState(item.colors[0]);
-  const [isNew] = useState(true);
+  const [isNew] = useState(item.isNew);
+  const { addItem } = useCart();
 
   const photos = selectedColor.photos
     .sort((a, b) => a.display_order - b.display_order)
     .map(p => p.photo_url)
     .slice(0, 2);
+
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.stopPropagation(); // prevents navigation
+
+    addItem({
+      itemId: Number(item.id),
+      title: item.title,
+      price: item.price,
+      quantity: 1,
+      photo: photos[0], // first photo of selected color
+    });
+  };
 
   return (
     <Card
@@ -38,6 +52,7 @@ const ProductCard = ({ item, onItemPressed }: { item: Item; onItemPressed: (id: 
         <Button
           size="icon"
           variant="ghost"
+          onClick={handleQuickAdd}
           className="
             absolute bottom-2 right-3.5
             rounded-full border bg-background/80 hover:bg-background z-10
@@ -52,13 +67,15 @@ const ProductCard = ({ item, onItemPressed }: { item: Item; onItemPressed: (id: 
 
 
         {/* Color Swatches for small screens */}
-        <div className="absolute bottom-2 left-2 sm:hidden bg-white rounded-full z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <ColorSwatches
-            colors={item.colors}
-            selectedColor={selectedColor}
-            onSelect={(color) => setSelectedColor(color)}
-          />
-        </div>
+        {(item.colors.length > 1) && (
+          <div className="absolute bottom-2 left-2 sm:hidden bg-white rounded-full z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <ColorSwatches
+              colors={item.colors}
+              selectedColor={selectedColor}
+              onSelect={(color) => setSelectedColor(color)}
+            />
+          </div>
+        )}
 
         {/* Photos */}
         {photos.length > 0 && (
@@ -88,13 +105,15 @@ const ProductCard = ({ item, onItemPressed }: { item: Item; onItemPressed: (id: 
         </span>
 
         {/* Color Swatches for larger screens */}
-        <div className="absolute bottom-4 sm:bottom-6 right-2 hidden sm:block group-hover:opacity-100 opacity-0 transition-opacity duration-500">
-          <ColorSwatches
-            colors={item.colors}
-            selectedColor={selectedColor}
-            onSelect={(color) => setSelectedColor(color)}
-          />
-        </div>
+         {(item.colors.length > 1) && (
+          <div className="absolute bottom-4 sm:bottom-6 right-2 hidden sm:block group-hover:opacity-100 opacity-0 transition-opacity duration-500">
+            <ColorSwatches
+              colors={item.colors}
+              selectedColor={selectedColor}
+              onSelect={(color) => setSelectedColor(color)}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
