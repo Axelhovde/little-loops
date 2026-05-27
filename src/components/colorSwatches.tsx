@@ -4,7 +4,7 @@ import { ItemColor } from "@/interfaces/types"
 
 interface ColorSwatchProps {
   colors: ItemColor[]
-  selectedColor: ItemColor
+  selectedColor: ItemColor | null
   onSelect: (color: ItemColor) => void
 }
 
@@ -12,7 +12,7 @@ const ColorSwatches: React.FC<ColorSwatchProps> = ({ colors, selectedColor, onSe
   return (
     <div className="flex flex-wrap">
       {colors.map((color) => {
-        const isSelected = selectedColor.id === color.id
+        const isSelected = selectedColor?.id === color.id
 
         return (
           <button

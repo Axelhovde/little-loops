@@ -68,6 +68,14 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       (i) => i.itemId === item.itemId && i.selectedSize === item.selectedSize
     );
     const newQty = existing ? existing.quantity + item.quantity : item.quantity;
+
+    if (
+      item.stockQuantity !== undefined &&
+      newQty > item.stockQuantity
+    ) {
+      throw new Error(`Maks antall tilgjengelig er ${item.stockQuantity}`);
+    }
+
     const dbQty = getTotalQtyForItem(items, item.itemId, item.selectedSize, newQty);
 
     if (userId) {
@@ -78,7 +86,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       if (existing) {
         return prev.map((i) =>
           i.itemId === item.itemId && i.selectedSize === item.selectedSize
-            ? { ...i, quantity: newQty }
+            ? { ...i, quantity: newQty, stockQuantity: item.stockQuantity ?? i.stockQuantity }
             : i
         );
       }
@@ -93,7 +101,12 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   ) => {
     if (qty <= 0) return removeItem(itemId, selectedSize);
 
-    const dbQty = getTotalQtyForItem(items, itemId, selectedSize, qty);
+    const stockLimit = items.find(
+      (i) => i.itemId === itemId && i.selectedSize === selectedSize
+    )?.stockQuantity;
+    const cappedQty = stockLimit !== undefined ? Math.min(qty, stockLimit) : qty;
+
+    const dbQty = getTotalQtyForItem(items, itemId, selectedSize, cappedQty);
 
     if (userId) {
       await upsertCartItem(userId, itemId, dbQty);
@@ -102,7 +115,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     setItems((prev) =>
       prev.map((i) =>
         i.itemId === itemId && i.selectedSize === selectedSize
-          ? { ...i, quantity: qty }
+          ? { ...i, quantity: cappedQty }
           : i
       )
     );

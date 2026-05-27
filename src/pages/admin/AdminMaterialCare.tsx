@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import {
@@ -8,6 +8,31 @@ import {
   deleteMaterialCareGuide,
 } from "@/services/materialCare.service";
 import type { MaterialCareGuide } from "@/interfaces/types";
+
+const insertBulletNewline = (
+  e: React.KeyboardEvent<HTMLTextAreaElement>,
+  value: string,
+  setValue: (v: string) => void
+) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const newValue = value.substring(0, start) + "\n• " + value.substring(end);
+  setValue(newValue);
+  requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 3; });
+};
+
+const handleDescChange = (
+  e: React.ChangeEvent<HTMLTextAreaElement>,
+  prevValue: string,
+  setValue: (v: string) => void
+) => {
+  let val = e.target.value;
+  if (prevValue === "" && val !== "") val = "• " + val;
+  setValue(val);
+};
 
 const AdminMaterialCare = () => {
   const navigate = useNavigate();
@@ -133,7 +158,8 @@ const AdminMaterialCare = () => {
                 rows={5}
                 placeholder={"• Made from hypoallergenic materials\n• Avoid contact with water and perfumes\n• Store in a dry place when not wearing\n• Clean with a soft dry cloth"}
                 value={newDesc}
-                onChange={(e) => setNewDesc(e.target.value)}
+                onChange={(e) => handleDescChange(e, newDesc, setNewDesc)}
+                onKeyDown={(e) => insertBulletNewline(e, newDesc, setNewDesc)}
               />
             </div>
             <div className="flex gap-3">
@@ -176,7 +202,8 @@ const AdminMaterialCare = () => {
                       className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                       rows={6}
                       value={editDesc}
-                      onChange={(e) => setEditDesc(e.target.value)}
+                      onChange={(e) => handleDescChange(e, editDesc, setEditDesc)}
+                      onKeyDown={(e) => insertBulletNewline(e, editDesc, setEditDesc)}
                     />
                     <div className="flex gap-2">
                       <button

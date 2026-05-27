@@ -88,6 +88,7 @@ export async function getItem(itemId: number): Promise<Item> {
     title: item.item_name,
     description: item.description,
     price: item.price,
+    quantity: item.quantity ?? 0,
     sizes: item.sizes ?? [],
     item_type: item.item_type ?? "necklace",
     rating: item.rating ?? 0,
@@ -98,6 +99,7 @@ export async function getItem(itemId: number): Promise<Item> {
     isNew,
     material_care_id: item.material_care_id ?? undefined,
     material_care: await fetchMaterialCareGuide(item.material_care_id),
+    sizeQuantities: item.sizes?.length > 0 ? await getSizeQuantities(item.item_id) : undefined,
   };
 }
 
@@ -179,6 +181,7 @@ export async function getSimilarItems(
       title: item.item_name,
       description: item.description,
       price: item.price,
+      quantity: item.quantity ?? 0,
       item_type: item.item_type ?? "necklace",
       sizes: item.sizes ?? [],
       colors,
@@ -186,6 +189,42 @@ export async function getSimilarItems(
       isNew,
     };
   });
+}
+
+/* ---------------- DELETE ITEM ---------------- */
+export async function deleteItem(itemId: number): Promise<void> {
+  const { error } = await supabase
+    .from("items")
+    .delete()
+    .eq("item_id", itemId);
+  if (error) throw error;
+}
+
+/* ---------------- SIZE QUANTITIES ---------------- */
+export async function getSizeQuantities(itemId: number): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("item_size_quantities")
+    .select("size, quantity")
+    .eq("item_id", itemId);
+  if (error) return {};
+  const result: Record<string, number> = {};
+  (data ?? []).forEach((row: any) => { result[row.size] = row.quantity; });
+  return result;
+}
+
+export async function updateSizeQuantities(
+  itemId: number,
+  sizeQty: Record<string, number>
+): Promise<void> {
+  for (const [size, quantity] of Object.entries(sizeQty)) {
+    const { error } = await supabase
+      .from("item_size_quantities")
+      .upsert({ item_id: itemId, size, quantity }, { onConflict: "item_id,size" });
+    if (error) throw error;
+  }
+  // Keep items.quantity in sync with sum
+  const total = Object.values(sizeQty).reduce((s, q) => s + q, 0);
+  await supabase.from("items").update({ quantity: total }).eq("item_id", itemId);
 }
 
 /* ---------------- UPDATE ITEM ---------------- */

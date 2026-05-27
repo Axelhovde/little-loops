@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../helper/supabaseClient";
-import { NECKLACE_SIZES, ITEM_TYPES } from "@/interfaces/types";
+import { NECKLACE_SIZES, CLOTHING_SIZES, ITEM_TYPES } from "@/interfaces/types";
 import { getMaterialCareGuides } from "@/services/materialCare.service";
-import type { MaterialCareGuide } from "@/interfaces/types";
+import { getCollections } from "@/services/collections.service";
+import type { MaterialCareGuide, Collection } from "@/interfaces/types";
 import {
   DndContext,
   closestCenter,
@@ -73,6 +74,9 @@ const AdminAddItem = () => {
   >([]);
   const [guides, setGuides] = useState<MaterialCareGuide[]>([]);
   const [selectedGuideId, setSelectedGuideId] = useState<number | "">("");
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<number | "">("");
+  const [isHidden, setIsHidden] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -82,6 +86,7 @@ const AdminAddItem = () => {
       .select("*")
       .then(({ data }) => data && setExistingColors(data));
     getMaterialCareGuides().then(setGuides).catch(() => {});
+    getCollections().then(setCollections).catch(() => {});
   }, []);
 
   const toggleSize = (size: string) => {
@@ -176,6 +181,8 @@ const AdminAddItem = () => {
           item_type: itemType,
           sizes: selectedSizes,
           material_care_id: selectedGuideId !== "" ? selectedGuideId : null,
+          collection_id: selectedCollectionId !== "" ? selectedCollectionId : null,
+          ishidden: isHidden,
         })
         .select()
         .single();
@@ -342,6 +349,52 @@ const AdminAddItem = () => {
                   </p>
                 )}
               </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Collection
+                  <span className="ml-2 font-normal text-muted-foreground text-xs">(optional)</span>
+                </label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  value={selectedCollectionId}
+                  onChange={(e) =>
+                    setSelectedCollectionId(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                >
+                  <option value="">— No collection —</option>
+                  {collections.map((c) => (
+                    <option key={c.collection_id} value={c.collection_id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {collections.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No collections yet — create them in{" "}
+                    <a href="/admin/collections" className="underline hover:text-primary">
+                      Collections
+                    </a>
+                    .
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-start gap-3 p-3 border rounded-lg bg-yellow-50 border-yellow-200">
+                <input
+                  type="checkbox"
+                  id="isHidden"
+                  checked={isHidden}
+                  onChange={(e) => setIsHidden(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-primary cursor-pointer"
+                />
+                <label htmlFor="isHidden" className="cursor-pointer">
+                  <span className="text-sm font-medium">Hide from store</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Item will be saved but not visible to customers until unhidden.
+                  </p>
+                </label>
+              </div>
             </div>
           </section>
 
@@ -349,12 +402,9 @@ const AdminAddItem = () => {
           <section>
             <h2 className="font-semibold text-lg mb-3 border-b pb-2">
               Available Sizes
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                (select 1–3)
-              </span>
             </h2>
             <div className="flex flex-wrap gap-2">
-              {NECKLACE_SIZES.map((size) => {
+              {(itemType === "knitting_pattern" ? CLOTHING_SIZES : NECKLACE_SIZES).map((size) => {
                 const active = selectedSizes.includes(size);
                 return (
                   <button

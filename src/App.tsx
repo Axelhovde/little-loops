@@ -21,6 +21,7 @@ import AdminInventory from "./pages/admin/AdminInventory";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminStats from "./pages/admin/AdminStats";
 import AdminMaterialCare from "./pages/admin/AdminMaterialCare";
+import AdminCollections from "./pages/admin/AdminCollections";
 import CartPage from "./pages/cartPage";
 import "@fontsource/poppins/400.css";
 import "@fontsource/poppins/500.css";
@@ -53,7 +54,9 @@ const App = () => {
           <Routes>
             {/* Public */}
             <Route path="/" element={<Index />} />
-            <Route path="/store" element={<StorePage />} />
+            <Route path="/store" element={<StorePage category="jewelry" />} />
+            <Route path="/jewelry" element={<StorePage category="jewelry" />} />
+            <Route path="/knitting" element={<StorePage category="knitting" />} />
             <Route path="/item/:id" element={<ItemPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/register" element={<RegisterPage />} />
@@ -133,6 +136,14 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <AdminMaterialCare />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/collections"
+              element={
+                <ProtectedRoute>
+                  <AdminCollections />
                 </ProtectedRoute>
               }
             />

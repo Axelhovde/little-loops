@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { NECKLACE_SIZES, ITEM_TYPES } from "@/interfaces/types";
-import { ArrowLeft, Save } from "lucide-react";
+import { NECKLACE_SIZES, CLOTHING_SIZES, ITEM_TYPES } from "@/interfaces/types";
+import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { deleteItem } from "@/services/items.service";
 
 import { getItemFull, updateItem } from "@/services/items.service";
 import { deleteItemPhoto, getItemPhotos, uploadItemPhoto } from "@/services/photos.service";
@@ -13,7 +14,8 @@ import {
   reassignColorVariant,
 } from "@/services/colors.service";
 import { getMaterialCareGuides } from "@/services/materialCare.service";
-import { AdminItem, AdminItemColor, AdminPhoto, MaterialCareGuide } from "@/interfaces/types";
+import { getCollections } from "@/services/collections.service";
+import { AdminItem, AdminItemColor, AdminPhoto, MaterialCareGuide, Collection } from "@/interfaces/types";
 
 const AdminUpdateItem = () => {
   const { id } = useParams();
@@ -35,6 +37,8 @@ const AdminUpdateItem = () => {
   const [selectedColorToAdd, setSelectedColorToAdd] = useState<number | null>(null);
   const [guides, setGuides] = useState<MaterialCareGuide[]>([]);
   const [selectedGuideId, setSelectedGuideId] = useState<number | "">("");
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<number | "">("");
 
   useEffect(() => {
     const load = async () => {
@@ -44,6 +48,7 @@ const AdminUpdateItem = () => {
         const c = await getAllColors();
         const photosResult = await getItemPhotos(itemId);
         getMaterialCareGuides().then(setGuides).catch(() => {});
+        getCollections().then(setCollections).catch(() => {});
 
         setAllColors(c || []);
         setItem(result.item || null);
@@ -51,6 +56,7 @@ const AdminUpdateItem = () => {
         setPhotos(photosResult || []);
         setSelectedSizes(result.item?.sizes ?? []);
         setSelectedGuideId(result.item?.material_care_id ?? "");
+        setSelectedCollectionId(result.item?.collection_id ?? "");
       } catch (err) {
         console.error("Error loading item data:", err);
         alert("Failed loading item data (check console).");
@@ -67,6 +73,17 @@ const AdminUpdateItem = () => {
     );
   };
 
+  const handleDelete = async () => {
+    if (!confirm(`Delete "${item?.item_name}"? This cannot be undone and removes all photos and color variants.`)) return;
+    try {
+      await deleteItem(itemId);
+      navigate("/admin/AdminItemOverview");
+    } catch (err) {
+      console.error("Delete failed:", err);
+      alert("Failed to delete item.");
+    }
+  };
+
   const handleSaveAll = async () => {
     if (!item) return;
     setSaving(true);
@@ -79,6 +96,8 @@ const AdminUpdateItem = () => {
         item_type: item.item_type,
         sizes: selectedSizes,
         material_care_id: selectedGuideId !== "" ? selectedGuideId : null,
+        collection_id: selectedCollectionId !== "" ? selectedCollectionId : null,
+        ishidden: item.ishidden ?? false,
       });
       navigate("/admin/AdminItemOverview");
     } catch (err) {
@@ -190,14 +209,23 @@ const AdminUpdateItem = () => {
 
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold">Edit Item</h1>
-          <button
-            onClick={handleSaveAll}
-            disabled={saving}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-semibold hover:bg-primary/90 transition disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 bg-red-50 text-red-700 border border-red-200 px-4 py-2.5 rounded-lg font-semibold hover:bg-red-100 transition"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </button>
+            <button
+              onClick={handleSaveAll}
+              disabled={saving}
+              className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-semibold hover:bg-primary/90 transition disabled:opacity-60"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -298,16 +326,61 @@ const AdminUpdateItem = () => {
                 </p>
               )}
             </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Collection
+                <span className="ml-2 font-normal text-muted-foreground text-xs">(optional)</span>
+              </label>
+              <select
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={selectedCollectionId}
+                onChange={(e) =>
+                  setSelectedCollectionId(e.target.value === "" ? "" : Number(e.target.value))
+                }
+              >
+                <option value="">— No collection —</option>
+                {collections.map((c) => (
+                  <option key={c.collection_id} value={c.collection_id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {collections.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  No collections yet — create them in{" "}
+                  <a href="/admin/collections" className="underline hover:text-primary">
+                    Collections
+                  </a>
+                  .
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-start gap-3 p-3 border rounded-lg bg-yellow-50 border-yellow-200">
+              <input
+                type="checkbox"
+                id="isHiddenUpdate"
+                checked={item?.ishidden ?? false}
+                onChange={(e) => setItem((s: any) => ({ ...s, ishidden: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 accent-primary cursor-pointer"
+              />
+              <label htmlFor="isHiddenUpdate" className="cursor-pointer">
+                <span className="text-sm font-medium">Hide from store</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  When checked, this item is not visible to customers.
+                </p>
+              </label>
+            </div>
           </div>
 
           {/* Sizes */}
           <div className="bg-white rounded-xl shadow p-6">
             <h2 className="font-semibold text-lg border-b pb-2 mb-4">
               Available Sizes
-              <span className="ml-2 text-sm font-normal text-muted-foreground">(select 1–3)</span>
             </h2>
             <div className="flex flex-wrap gap-2">
-              {NECKLACE_SIZES.map((size) => {
+              {(item?.item_type === "knitting_pattern" ? CLOTHING_SIZES : NECKLACE_SIZES).map((size) => {
                 const active = selectedSizes.includes(size);
                 return (
                   <button

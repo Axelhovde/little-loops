@@ -7,6 +7,7 @@ import {
   BarChart2,
   ClipboardList,
   BookOpen,
+  FolderOpen,
 } from "lucide-react";
 
 const tiles = [
@@ -51,6 +52,13 @@ const tiles = [
     label: "Materials & Care",
     description: "Manage care guides for products",
     color: "bg-teal-600 text-white",
+  },
+  {
+    to: "/admin/collections",
+    icon: FolderOpen,
+    label: "Collections",
+    description: "Create and manage product collections",
+    color: "bg-indigo-600 text-white",
   },
 ];
 

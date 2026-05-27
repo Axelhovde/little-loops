@@ -103,3 +103,123 @@ CREATE TABLE IF NOT EXISTS material_care_guides (
 ALTER TABLE items
   ADD COLUMN IF NOT EXISTS material_care_id INTEGER
   REFERENCES material_care_guides(guide_id) ON DELETE SET NULL;
+
+-- ── 9. collections ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS collections (
+  collection_id SERIAL PRIMARY KEY,
+  name          TEXT NOT NULL,
+  description   TEXT,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── 10. items: add collection_id FK + ishidden ───────────────────
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS collection_id INTEGER
+  REFERENCES collections(collection_id) ON DELETE SET NULL;
+
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS ishidden BOOLEAN NOT NULL DEFAULT false;
+
+-- ── 11. orders: Stripe payment columns ───────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_status TEXT;
+
+DROP POLICY IF EXISTS "users_update_own_orders" ON orders;
+CREATE POLICY "users_update_own_orders" ON orders
+  FOR UPDATE USING (auth.uid() = profile_id);
+
+-- ── 12. RLS for material_care_guides ─────────────────────────────
+ALTER TABLE material_care_guides ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_guides" ON material_care_guides;
+CREATE POLICY "public_read_guides" ON material_care_guides
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "auth_manage_guides" ON material_care_guides;
+CREATE POLICY "auth_manage_guides" ON material_care_guides
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ── 13. RLS for collections ───────────────────────────────────────
+ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_collections" ON collections;
+CREATE POLICY "public_read_collections" ON collections
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "auth_manage_collections" ON collections;
+CREATE POLICY "auth_manage_collections" ON collections
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ── 14. Per-size inventory ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS item_size_quantities (
+  id        SERIAL PRIMARY KEY,
+  item_id   INTEGER NOT NULL REFERENCES items(item_id) ON DELETE CASCADE,
+  size      TEXT    NOT NULL,
+  quantity  INTEGER NOT NULL DEFAULT 0,
+  CONSTRAINT uq_item_size UNIQUE (item_id, size)
+);
+
+ALTER TABLE item_size_quantities ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_size_qty" ON item_size_quantities;
+CREATE POLICY "public_read_size_qty" ON item_size_quantities
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "auth_manage_size_qty" ON item_size_quantities;
+CREATE POLICY "auth_manage_size_qty" ON item_size_quantities
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- ── 15. Atomic stock-decrement RPC ───────────────────────────────
+CREATE OR REPLACE FUNCTION decrement_stock(
+  p_item_id  INT,
+  p_size     TEXT,
+  p_quantity INT
+) RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF p_size IS NOT NULL AND p_size != '' THEN
+    UPDATE item_size_quantities
+       SET quantity = quantity - p_quantity
+     WHERE item_id = p_item_id
+       AND size    = p_size
+       AND quantity >= p_quantity;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'insufficient_stock: item % size %', p_item_id, p_size;
+    END IF;
+
+    UPDATE items
+       SET quantity = (
+             SELECT COALESCE(SUM(quantity), 0)
+               FROM item_size_quantities
+              WHERE item_id = p_item_id
+           )
+     WHERE item_id = p_item_id;
+  ELSE
+    UPDATE items
+       SET quantity = quantity - p_quantity
+     WHERE item_id = p_item_id
+       AND quantity >= p_quantity;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'insufficient_stock: item %', p_item_id;
+    END IF;
+  END IF;
+END;
+$$;
+
+-- ── 11. orders: add Stripe payment columns ───────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_status TEXT;
+
+-- Allow users to update their own orders (needed for cart clearing after payment)
+DROP POLICY IF EXISTS "users_update_own_orders" ON orders;
+CREATE POLICY "users_update_own_orders" ON orders
+  FOR UPDATE USING (auth.uid() = profile_id);

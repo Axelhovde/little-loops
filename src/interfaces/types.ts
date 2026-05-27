@@ -1,8 +1,12 @@
 // src/interfaces/types.ts
 
 export const NECKLACE_SIZES = ['14"', '16"', '18"', '20"', '22"', '24"'];
-export const ITEM_TYPES = ['necklace', 'bracelet', 'earring', 'other'] as const;
+export const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+export const ITEM_TYPES = ['necklace', 'bracelet', 'earring', 'other', 'knitting_pattern'] as const;
 export type ItemType = typeof ITEM_TYPES[number];
+
+export const JEWELRY_TYPES: ItemType[] = ['necklace', 'bracelet', 'earring', 'other'];
+export const KNITTING_TYPES: ItemType[] = ['knitting_pattern'];
 
 export interface ItemPhoto {
   photo_id: number;
@@ -30,12 +34,16 @@ export interface Item {
   rating?: number;
   reviews?: number;
 
+  quantity?: number;
+  sizeQuantities?: Record<string, number>;
   ishidden?: boolean;
   createdAt?: string;
   isNew: boolean;
 
   material_care_id?: number;
   material_care?: MaterialCareGuide;
+  collection_id?: number;
+  collection?: Collection;
 }
 
 export type AdminItem = {
@@ -47,6 +55,9 @@ export type AdminItem = {
   sizes: string[];
   item_type: string;
   created_at?: string;
+  ishidden?: boolean;
+  collection_id?: number | null;
+  material_care_id?: number | null;
 };
 
 export type AdminItemColor = {
@@ -67,6 +78,7 @@ export interface CartItem {
   quantity: number;
   photo: string;
   selectedSize?: string;
+  stockQuantity?: number;
 }
 
 export interface CartItemDB {
@@ -87,6 +99,13 @@ export interface OrderItem {
   item_photo?: string;
 }
 
+export interface Collection {
+  collection_id: number;
+  name: string;
+  description?: string;
+  created_at: string;
+}
+
 export interface MaterialCareGuide {
   guide_id: number;
   title: string;
@@ -98,7 +117,9 @@ export interface Order {
   order_id: number;        // serial integer in DB
   profile_id: string;      // references profiles.id (= auth.users.id)
   user_email: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending_payment' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  payment_status?: 'paid' | 'failed' | null;
+  stripe_payment_intent_id?: string | null;
   total_price: number;
   order_date: string;      // existing column name in DB
   created_at: string;

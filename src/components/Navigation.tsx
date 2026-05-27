@@ -41,7 +41,7 @@ const CartOverlay = ({
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <ShoppingBag className="h-12 w-12 opacity-30" />
             <p>Your cart is empty</p>
-            <Button variant="outline" onClick={() => { onClose(); navigate("/store"); }}>
+            <Button variant="outline" onClick={() => { onClose(); navigate("/jewelry"); }}>
               Browse Shop
             </Button>
           </div>
@@ -49,7 +49,7 @@ const CartOverlay = ({
           <>
             <div className="flex-1 overflow-y-auto py-4 space-y-4">
               {items.map((item) => (
-                <div key={item.itemId} className="flex gap-3 items-start">
+                <div key={`${item.itemId}-${item.selectedSize ?? ""}`} className="flex gap-3 items-start">
                   {item.photo && (
                     <img
                       src={item.photo}
@@ -79,13 +79,14 @@ const CartOverlay = ({
                         variant="ghost"
                         className="h-6 w-6"
                         onClick={() => updateQuantity(item.itemId, item.quantity + 1, item.selectedSize)}
+                        disabled={item.stockQuantity !== undefined && item.quantity >= item.stockQuantity}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <p className="text-sm font-medium">{(item.price * item.quantity)} NOK</p>
+                    <p className="text-sm font-medium">{item.price * item.quantity} NOK</p>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -128,6 +129,8 @@ const Navigation = () => {
   const [userName, setUserName] = useState<string | null>(null);
   const isHomePage = location.pathname === "/";
   const [scrolled, setScrolled] = useState(false);
+  const [navVisible, setNavVisible] = useState(true);
+  const lastScrollYRef = useRef(0);
   const { items } = useCart();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,7 +155,7 @@ const Navigation = () => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (q) {
-      navigate(`/store?q=${encodeURIComponent(q)}`);
+      navigate(`/jewelry?q=${encodeURIComponent(q)}`);
       handleSearchClose();
     }
   };
@@ -172,9 +175,7 @@ const Navigation = () => {
 
   useEffect(() => {
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserName(user.user_metadata?.full_name || user.email || null);
       }
@@ -190,8 +191,23 @@ const Navigation = () => {
   }, []);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 100);
-    window.addEventListener("scroll", handleScroll);
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const diff = currentY - lastScrollYRef.current;
+
+      setScrolled(currentY > 80);
+
+      if (currentY < 80) {
+        setNavVisible(true);
+      } else if (diff > 6) {
+        setNavVisible(false);
+      } else if (diff < -4) {
+        setNavVisible(true);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -200,10 +216,11 @@ const Navigation = () => {
   return (
     <>
       <nav
-        className={`${isHomePage ? "fixed w-full" : "sticky"} top-0 z-50 transition-all duration-500 border-border group/nav
+        className={`${isHomePage ? "fixed w-full" : "sticky"} top-0 z-50 transition-all duration-300 border-border group/nav
+          ${navVisible ? "translate-y-0" : "-translate-y-full"}
           ${isTransparent
             ? "bg-transparent hover:bg-black/30 backdrop-blur-none hover:backdrop-blur-sm"
-            : "bg-background/95 border-b backdrop-blur"
+            : "bg-neutral-200 border-b border-neutral-300"
           }
         `}
       >
@@ -221,7 +238,8 @@ const Navigation = () => {
             <div className="hidden md:flex items-center space-x-8">
               {[
                 { to: "/", label: "Home" },
-                { to: "/store", label: "Shop" },
+                { to: "/jewelry", label: "Jewelry" },
+                { to: "/knitting", label: "Patterns" },
                 { to: "/about", label: "About" },
               ].map(({ to, label }) => (
                 <Link
@@ -328,27 +346,21 @@ const Navigation = () => {
           {isMenuOpen && (
             <div className="md:hidden py-4 border-t border-border">
               <div className="flex flex-col space-y-4">
-                <Link
-                  to="/"
-                  className={`px-4 py-2 rounded transition-colors ${isActive("/") ? "bg-secondary text-primary" : "hover:bg-secondary"}`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Home
-                </Link>
-                <Link
-                  to="/store"
-                  className={`px-4 py-2 rounded transition-colors ${isActive("/store") ? "bg-secondary text-primary" : "hover:bg-secondary"}`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Shop
-                </Link>
-                <Link
-                  to="/about"
-                  className={`px-4 py-2 rounded transition-colors ${isActive("/about") ? "bg-secondary text-primary" : "hover:bg-secondary"}`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  About
-                </Link>
+                {[
+                  { to: "/", label: "Home" },
+                  { to: "/jewelry", label: "Jewelry" },
+                  { to: "/knitting", label: "Patterns" },
+                  { to: "/about", label: "About" },
+                ].map(({ to, label }) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    className={`px-4 py-2 rounded transition-colors ${isActive(to) ? "bg-secondary text-primary" : "hover:bg-secondary"}`}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {label}
+                  </Link>
+                ))}
               </div>
             </div>
           )}

@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import type { Item, ItemColor } from "@/interfaces/types";
 import { ShieldCheck, Sparkles, RefreshCw, Truck, ShoppingBag } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatSize } from "@/lib/sizeUtils";
 
 const TRUST_BADGES = [
   { icon: Sparkles, label: "Handmade with love" },
@@ -40,7 +41,7 @@ const TRUST_BADGES = [
 const ItemPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addItem } = useCart();
+  const { addItem, items } = useCart();
 
   const [item, setItem] = useState<Item | null>(null);
   const [selectedColor, setSelectedColor] = useState<ItemColor | null>(null);
@@ -57,7 +58,10 @@ const ItemPage = () => {
     getItem(Number(id))
       .then((fetched) => {
         setItem(fetched);
-        setSelectedColor(fetched.colors[0] ?? null);
+        const multiColor = fetched.colors.length > 1;
+        const hasSz = fetched.sizes && fetched.sizes.length > 0;
+        // Require explicit color selection when item has both multiple colors and sizes
+        setSelectedColor(multiColor && hasSz ? null : (fetched.colors[0] ?? null));
         getSimilarItems(fetched.id, fetched.item_type).then(setSimilarItems);
       })
       .catch((err) => console.error("Error loading item:", err));
@@ -137,10 +141,42 @@ const ItemPage = () => {
   const displayedPhotos = selectedColor?.photos ?? item.photos;
   const hasSizes = item.sizes && item.sizes.length > 0;
   const hasColors = item.colors.length > 1;
+  const stock = item.quantity ?? 0;
+  const outOfStock = stock === 0;
+
+  // Per-size stock: use sizeQuantities[selectedSize] when a size is selected
+  const effectiveStock = (hasSizes && selectedSize && item.sizeQuantities)
+    ? (item.sizeQuantities[selectedSize] ?? 0)
+    : stock;
+  const effectiveOutOfStock = hasSizes && selectedSize
+    ? effectiveStock === 0
+    : outOfStock;
+
+  const alreadyInCart = items
+    .filter((i) => i.itemId === item.id && (!hasSizes || i.selectedSize === selectedSize))
+    .reduce((sum, i) => sum + i.quantity, 0);
+  const atStockLimit = effectiveStock > 0 && alreadyInCart >= effectiveStock;
+
+  // No stock label when size-based item has no size selected yet
+  const stockLabel: { text: string } | null = hasSizes && !selectedSize
+    ? null
+    : effectiveOutOfStock
+    ? { text: "Out of stock" }
+    : effectiveStock <= 5
+    ? { text: `Only ${effectiveStock} left` }
+    : { text: "In stock" };
 
   const handleAddToCart = async () => {
+    if (hasColors && !selectedColor) {
+      toast.error("Please select a color first.");
+      return;
+    }
     if (hasSizes && !selectedSize) {
       toast.error("Please select a size before adding to cart.");
+      return;
+    }
+    if (effectiveOutOfStock || atStockLimit) {
+      toast.error(effectiveOutOfStock ? "This item is out of stock." : `Max quantity (${effectiveStock}) already in cart.`);
       return;
     }
 
@@ -153,8 +189,11 @@ const ItemPage = () => {
         quantity: 1,
         photo: displayedPhotos[0]?.photo_url ?? "",
         selectedSize: selectedSize ?? undefined,
+        stockQuantity: effectiveStock,
       });
       toast.success(`${item.title} added to cart!`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not add to cart.");
     } finally {
       setAdding(false);
     }
@@ -232,12 +271,15 @@ const ItemPage = () => {
               <div className="space-y-3">
                 <p className="text-sm font-medium">
                   Color:{" "}
-                  <span className="text-muted-foreground font-normal">{selectedColor?.name}</span>
+                  {selectedColor
+                    ? <span className="text-muted-foreground font-normal">{selectedColor.name}</span>
+                    : <span className="text-destructive font-normal">Select a color</span>
+                  }
                 </p>
                 <ColorSwatches
                   colors={item.colors}
                   selectedColor={selectedColor}
-                  onSelect={(c) => setSelectedColor(c)}
+                  onSelect={(c) => { setSelectedColor(c); setSelectedSize(null); }}
                 />
               </div>
             )}
@@ -249,27 +291,38 @@ const ItemPage = () => {
                   <p className="text-sm font-medium">
                     Size:{" "}
                     {selectedSize ? (
-                      <span className="text-muted-foreground font-normal">{selectedSize}</span>
+                      <span className="text-muted-foreground font-normal">{formatSize(selectedSize)}</span>
                     ) : (
-                      <span className="text-destructive font-normal">Select a size</span>
+                      <span className="text-destructive font-normal">
+                        {hasColors && !selectedColor ? "Select color first" : "Select a size"}
+                      </span>
                     )}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {item.sizes.map((size) => {
                     const isSelected = selectedSize === size;
+                    const sizeStock = item.sizeQuantities?.[size] ?? stock;
+                    const noStock = sizeStock === 0;
+                    const disabledByColor = hasColors && !selectedColor;
                     return (
                       <button
                         key={size}
                         type="button"
-                        onClick={() => setSelectedSize(isSelected ? null : size)}
-                        className={`px-5 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                        onClick={() => !disabledByColor && setSelectedSize(isSelected ? null : size)}
+                        disabled={noStock || disabledByColor}
+                        className={`px-5 py-2.5 rounded-lg border text-sm font-medium transition-all relative disabled:opacity-50 disabled:cursor-not-allowed ${
                           isSelected
                             ? "bg-primary text-primary-foreground border-primary shadow-sm"
                             : "bg-background text-foreground border-border hover:border-primary hover:text-primary"
                         }`}
                       >
-                        {size}
+                        {formatSize(size)}
+                        {!noStock && !disabledByColor && sizeStock <= 3 && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-orange-500 text-white text-[9px] rounded-full px-1">
+                            {sizeStock}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -277,14 +330,25 @@ const ItemPage = () => {
               </div>
             )}
 
+            {/* Stock status — shown after size selection for sized items */}
+            {stockLabel && (
+              <p className="text-sm text-foreground/60">{stockLabel.text}</p>
+            )}
+
             {/* Add to Cart */}
             <button
               onClick={handleAddToCart}
-              disabled={adding}
+              disabled={adding || effectiveOutOfStock || atStockLimit}
               className="w-full flex items-center justify-center gap-3 py-4 px-8 bg-primary text-primary-foreground font-semibold text-base rounded-xl hover:bg-primary/90 active:scale-[0.99] transition-all disabled:opacity-60 shadow-sm"
             >
               <ShoppingBag className="h-5 w-5" />
-              {adding ? "Adding to Cart..." : "Add to Cart"}
+              {adding
+                ? "Adding to Cart..."
+                : effectiveOutOfStock
+                ? "Out of stock"
+                : atStockLimit
+                ? "Max quantity in cart"
+                : "Add to Cart"}
             </button>
 
             {/* Trust badges */}
