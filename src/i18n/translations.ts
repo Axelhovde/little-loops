@@ -16,6 +16,7 @@ const translations = {
       total: "Total",
       goToCheckout: "Go to Checkout",
       continueShopping: "Continue Shopping",
+      login: "Login",
       size: "Size",
     },
     cart: {
@@ -327,6 +328,7 @@ const translations = {
       total: "Totalt",
       goToCheckout: "Gå til kasse",
       continueShopping: "Fortsett å handle",
+      login: "Logg inn",
       size: "Størrelse",
     },
     cart: {

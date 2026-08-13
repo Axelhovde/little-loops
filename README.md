@@ -44,19 +44,10 @@ supabase/
   migration.sql   # DB schema
 ```
 
-## Admin access
-
-Admin routes are protected by `app_metadata.role = 'admin'` on the Supabase user. Set it with:
-
-```sql
-UPDATE auth.users
-SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
-WHERE email = 'your@email.com';
-```
-
 ## Deploying
 
 ```bash
+npm run build
 npm run deploy
 ```
 

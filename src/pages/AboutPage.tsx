@@ -25,7 +25,7 @@ const AboutPage = () => {
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{ backgroundImage: `url(${backgroundImage})` }}
         >
-          <div className="absolute inset-0 bg-background/65" />
+          <div className="absolute inset-0 bg-background/45" />
         </div>
         <div className="container mx-auto text-center relative z-10">
           <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-4 font-medium">
@@ -34,7 +34,7 @@ const AboutPage = () => {
           <h1 className="text-5xl md:text-6xl font-serif font-bold text-primary mb-5">
             {t.about.heroTitle}
           </h1>
-          <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
+          <p className="text-lg text-primary max-w-xl mx-auto leading-relaxed">
             {t.about.heroSubtitle}
           </p>
         </div>
