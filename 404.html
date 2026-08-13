@@ -2,14 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Content Security Policy — tightened for production.
+         Supabase URL and Stripe are the only external connect targets.
+         Adjust the connect-src *.supabase.co wildcard if you move projects. -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' https://js.stripe.com;
+      frame-src https://js.stripe.com https://hooks.stripe.com;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.bring.com;
+      img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in;
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+    " />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Little Loops – Premium Knitting Patterns & Craft Beads</title>
+    <title>Natalie Winger – Handmade Jewellery from Norway</title>
     <meta
       name="description"
-      content="Discover beautiful knitting patterns and premium craft beads at Little Loops. High-quality supplies for all your creative projects."
+      content="Discover beautiful handmade beaded jewellery by Natalie Winger. Crafted with love in Norway, one bead at a time."
     />
-    <meta name="author" content="Little Loops" />
+    <meta name="author" content="Natalie Winger" />
     <meta
       name="keywords"
       content="knitting patterns, craft beads, handmade, knitting supplies, jewelry making, crafting"
@@ -18,36 +33,41 @@
     <!-- Open Graph / Social Sharing -->
     <meta
       property="og:title"
-      content="Little Loops – Premium Knitting Patterns & Craft Beads"
+      content="Natalie Winger – Handmade Jewellery from Norway"
     />
     <meta
       property="og:description"
-      content="Discover beautiful knitting patterns and premium craft beads at Little Loops. High-quality supplies for all your creative projects."
+      content="Discover beautiful handmade beaded jewellery by Natalie Winger. Crafted with love in Norway, one bead at a time."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://www.littleloops.no/" />
+    <meta property="og:url" content="https://www.nataliewinger.com/" />
     <meta
       property="og:image"
-      content="https://www.littleloops.no/og-image.png"
+      content="https://www.nataliewinger.com/og-image.png"
     />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
 
     <!-- Twitter / X Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@littleloops" />
     <meta
       name="twitter:title"
-      content="Little Loops – Premium Knitting Patterns & Craft Beads"
+      content="Natalie Winger – Handmade Jewellery from Norway"
     />
     <meta
       name="twitter:description"
-      content="Discover beautiful knitting patterns and premium craft beads at Little Loops."
+      content="Discover beautiful handmade beaded jewellery by Natalie Winger."
     />
     <meta
       name="twitter:image"
-      content="https://www.littleloops.no/og-image.png"
+      content="https://www.nataliewinger.com/og-image.png"
     />
-    <script type="module" crossorigin src="/assets/index-Dd0YnedG.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Bzcs5Hcz.css">
+    <script type="module" crossorigin src="/assets/index-DXKysHgf.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-xe2FolFu.css">
   </head>
 
   <body>
