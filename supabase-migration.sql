@@ -1,0 +1,291 @@
+-- =============================================
+-- Cozy Loops Studio — Migration Script
+-- Safe to run multiple times (fully idempotent).
+-- Uses ADD COLUMN IF NOT EXISTS so existing columns
+-- are left untouched; existing tables are never dropped.
+-- =============================================
+
+-- ── 1. items: new columns ─────────────────────────────────────────
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS item_type TEXT NOT NULL DEFAULT 'necklace';
+
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS sizes JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- ── 2. orders: add user_email for admin display ───────────────────
+--    (existing columns: order_id serial, profile_id uuid, order_date,
+--     status, total_price, created_at)
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS user_email TEXT NOT NULL DEFAULT '';
+
+-- ── 3. order_items: add detail columns ───────────────────────────
+--    (existing columns: order_item_id serial, order_id int,
+--     item_id int, quantity int, price_per_item float8, created_at)
+ALTER TABLE order_items
+  ADD COLUMN IF NOT EXISTS selected_size TEXT;
+
+ALTER TABLE order_items
+  ADD COLUMN IF NOT EXISTS item_name TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE order_items
+  ADD COLUMN IF NOT EXISTS item_photo TEXT;
+
+-- ── 4. Indexes (all idempotent) ───────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_orders_profile_id   ON orders(profile_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status        ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_items_item_type      ON items(item_type);
+
+-- ── 5. Row Level Security — orders ───────────────────────────────
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+
+-- Users can read their own orders (profile page)
+DROP POLICY IF EXISTS "users_read_own_orders"    ON orders;
+CREATE POLICY "users_read_own_orders" ON orders
+  FOR SELECT USING (auth.uid() = profile_id);
+
+-- Users can insert their own orders
+DROP POLICY IF EXISTS "users_insert_own_orders"  ON orders;
+CREATE POLICY "users_insert_own_orders" ON orders
+  FOR INSERT WITH CHECK (auth.uid() = profile_id);
+
+-- Admins can read ALL orders (requires app_metadata.role = 'admin' in Supabase)
+DROP POLICY IF EXISTS "auth_read_all_orders"     ON orders;
+DROP POLICY IF EXISTS "admin_read_all_orders"    ON orders;
+CREATE POLICY "admin_read_all_orders" ON orders
+  FOR SELECT TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- Only admins can update orders (e.g. change status, add tracking numbers)
+DROP POLICY IF EXISTS "auth_update_orders"       ON orders;
+DROP POLICY IF EXISTS "admin_update_orders"      ON orders;
+CREATE POLICY "admin_update_orders" ON orders
+  FOR UPDATE TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- ── 6. Row Level Security — order_items ──────────────────────────
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+
+-- Users can read items in their own orders
+DROP POLICY IF EXISTS "users_read_own_order_items"   ON order_items;
+CREATE POLICY "users_read_own_order_items" ON order_items
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM orders
+      WHERE orders.order_id   = order_items.order_id
+        AND orders.profile_id = auth.uid()
+    )
+  );
+
+-- Users can insert items into their own orders
+DROP POLICY IF EXISTS "users_insert_own_order_items" ON order_items;
+CREATE POLICY "users_insert_own_order_items" ON order_items
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM orders
+      WHERE orders.order_id   = order_items.order_id
+        AND orders.profile_id = auth.uid()
+    )
+  );
+
+-- Admins can read ALL order_items
+DROP POLICY IF EXISTS "auth_read_all_order_items"    ON order_items;
+DROP POLICY IF EXISTS "admin_read_all_order_items"   ON order_items;
+CREATE POLICY "admin_read_all_order_items" ON order_items
+  FOR SELECT TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- ── 7. material_care_guides ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS material_care_guides (
+  guide_id    SERIAL PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── 8. items: add material_care_id FK ────────────────────────────
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS material_care_id INTEGER
+  REFERENCES material_care_guides(guide_id) ON DELETE SET NULL;
+
+-- ── 9. collections ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS collections (
+  collection_id SERIAL PRIMARY KEY,
+  name          TEXT NOT NULL,
+  description   TEXT,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+-- ── 10. items: add collection_id FK + ishidden ───────────────────
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS collection_id INTEGER
+  REFERENCES collections(collection_id) ON DELETE SET NULL;
+
+ALTER TABLE items
+  ADD COLUMN IF NOT EXISTS ishidden BOOLEAN NOT NULL DEFAULT false;
+
+-- ── 11. orders: Stripe payment columns ───────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_status TEXT;
+
+DROP POLICY IF EXISTS "users_update_own_orders" ON orders;
+CREATE POLICY "users_update_own_orders" ON orders
+  FOR UPDATE USING (auth.uid() = profile_id);
+
+-- ── 12. RLS for material_care_guides ─────────────────────────────
+ALTER TABLE material_care_guides ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_guides" ON material_care_guides;
+CREATE POLICY "public_read_guides" ON material_care_guides
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "auth_manage_guides"  ON material_care_guides;
+DROP POLICY IF EXISTS "admin_manage_guides" ON material_care_guides;
+CREATE POLICY "admin_manage_guides" ON material_care_guides
+  FOR ALL TO authenticated
+  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- ── 13. RLS for collections ───────────────────────────────────────
+ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_collections" ON collections;
+CREATE POLICY "public_read_collections" ON collections
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "auth_manage_collections"  ON collections;
+DROP POLICY IF EXISTS "admin_manage_collections" ON collections;
+CREATE POLICY "admin_manage_collections" ON collections
+  FOR ALL TO authenticated
+  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- ── 14. Per-size inventory ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS item_size_quantities (
+  id        SERIAL PRIMARY KEY,
+  item_id   INTEGER NOT NULL REFERENCES items(item_id) ON DELETE CASCADE,
+  size      TEXT    NOT NULL,
+  quantity  INTEGER NOT NULL DEFAULT 0,
+  CONSTRAINT uq_item_size UNIQUE (item_id, size)
+);
+
+ALTER TABLE item_size_quantities ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "public_read_size_qty" ON item_size_quantities;
+CREATE POLICY "public_read_size_qty" ON item_size_quantities
+  FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "auth_manage_size_qty"  ON item_size_quantities;
+DROP POLICY IF EXISTS "admin_manage_size_qty" ON item_size_quantities;
+CREATE POLICY "admin_manage_size_qty" ON item_size_quantities
+  FOR ALL TO authenticated
+  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- ── 15. Atomic stock-decrement RPC ───────────────────────────────
+CREATE OR REPLACE FUNCTION decrement_stock(
+  p_item_id  INT,
+  p_size     TEXT,
+  p_quantity INT
+) RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF p_size IS NOT NULL AND p_size != '' THEN
+    UPDATE item_size_quantities
+       SET quantity = quantity - p_quantity
+     WHERE item_id = p_item_id
+       AND size    = p_size
+       AND quantity >= p_quantity;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'insufficient_stock: item % size %', p_item_id, p_size;
+    END IF;
+
+    UPDATE items
+       SET quantity = (
+             SELECT COALESCE(SUM(quantity), 0)
+               FROM item_size_quantities
+              WHERE item_id = p_item_id
+           )
+     WHERE item_id = p_item_id;
+  ELSE
+    UPDATE items
+       SET quantity = quantity - p_quantity
+     WHERE item_id = p_item_id
+       AND quantity >= p_quantity;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'insufficient_stock: item %', p_item_id;
+    END IF;
+  END IF;
+END;
+$$;
+
+-- ── 11. orders: add Stripe payment columns ───────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_status TEXT;
+
+-- Allow users to update their own orders (needed for cart clearing after payment)
+DROP POLICY IF EXISTS "users_update_own_orders" ON orders;
+CREATE POLICY "users_update_own_orders" ON orders
+  FOR UPDATE USING (auth.uid() = profile_id);
+
+-- ── 16. shopping_cart_items: add selected_size for per-size tracking ──
+ALTER TABLE shopping_cart_items
+  ADD COLUMN IF NOT EXISTS selected_size TEXT NOT NULL DEFAULT '';
+
+-- Drop the old PK/unique constraint that only covers (cart_id, item_id)
+-- so we can create a new one that includes selected_size.
+-- Try common constraint names used by Supabase:
+ALTER TABLE shopping_cart_items
+  DROP CONSTRAINT IF EXISTS shopping_cart_items_pkey;
+ALTER TABLE shopping_cart_items
+  DROP CONSTRAINT IF EXISTS shopping_cart_items_cart_id_item_id_key;
+
+-- New unique constraint: one row per (user, item, size)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_cart_item_size'
+  ) THEN
+    ALTER TABLE shopping_cart_items
+      ADD CONSTRAINT uq_cart_item_size UNIQUE (cart_id, item_id, selected_size);
+  END IF;
+END $$;
+
+-- ── 18. Admin role setup ─────────────────────────────────────────
+-- Run this once in the Supabase SQL editor to grant admin access.
+-- Replace the email address with the actual admin email.
+--
+--   UPDATE auth.users
+--   SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
+--   WHERE email = 'your-admin@example.com';
+--
+-- After running, the user must sign out and sign back in (or refresh their
+-- JWT) for the new role to take effect in the browser.
+-- The app_metadata.role claim is checked by:
+--   • AdminRoute in src/App.tsx  (frontend guard)
+--   • RLS policies on orders, order_items, material_care_guides,
+--     collections, and item_size_quantities  (database guard)
+
+-- ── 17. orders: shipping address + Bring tracking columns ──
+-- Stores only the minimum personal data needed for delivery (GDPR data minimisation).
+-- Retained for the order lifetime to satisfy Norwegian accounting law (regnskapsloven § 13, 5 years).
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS shipping_name TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_address_line TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_postal_code TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_city TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_country TEXT NOT NULL DEFAULT 'NO',
+  ADD COLUMN IF NOT EXISTS shipping_phone TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_cost INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS bring_product_id TEXT,
+  ADD COLUMN IF NOT EXISTS bring_consignment_number TEXT,
+  ADD COLUMN IF NOT EXISTS bring_label_url TEXT;

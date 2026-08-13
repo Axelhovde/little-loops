@@ -1,166 +1,127 @@
 import { Link } from "react-router-dom";
-import { Heart, Instagram, Facebook, Palette } from "lucide-react";
-import React from "react";
+import { Heart, Instagram } from "lucide-react";
+import { useState } from "react";
 import { supabase } from "../helper/supabaseClient";
-import "../index.css";
+import { useLang } from "@/contexts/languageContext";
+
+type MsgKey = "success" | "alreadySignedUp" | "invalidEmail" | "error" | "";
 
 const Footer = () => {
-  
-  const [email, setEmail] = React.useState("");
-    const [message, setMessage] = React.useState("");
-    const [signupCount, setSignupCount] = React.useState(0);
-  
-    const handleNewsletterSignup = async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-  
-      // Simple email validation
-      if (!email.includes("@") || !email.includes(".")) {
-        setMessage("Please enter a valid email address.");
-        return;
+  const { t } = useLang();
+  const [email, setEmail] = useState("");
+  const [msgKey, setMsgKey] = useState<MsgKey>("");
+
+  const isError = msgKey === "alreadySignedUp" || msgKey === "invalidEmail" || msgKey === "error";
+
+  const msgText: Record<Exclude<MsgKey, "">, string> = {
+    success: t.footer.newsletterSuccess,
+    alreadySignedUp: t.footer.newsletterAlreadySignedUp,
+    invalidEmail: t.footer.newsletterInvalidEmail,
+    error: t.footer.newsletterError,
+  };
+
+  const handleNewsletterSignup = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email.includes("@") || !email.includes(".")) {
+      setMsgKey("invalidEmail");
+      return;
+    }
+    try {
+      const { error } = await supabase.from("newslettersignup").insert({ email });
+      if (error) {
+        setMsgKey(error.code === "23505" ? "alreadySignedUp" : "error");
+      } else {
+        setMsgKey("success");
+        setEmail("");
       }
-  
-      // Check max 3 per session
-      if (signupCount >= 3) {
-        setMessage("Something went wrong. Please try again.");
-        return;
-      }
-  
-      try {
-        const { data, error } = await supabase
-          .from("newslettersignup")
-          .insert({ email });
-  
-        if (error) {
-          if (error.code === "23505") { // unique violation
-            setMessage("This email is already signed up.");
-          } else {
-            console.error(error);
-            setMessage("Something went wrong. Please try again.");
-          }
-        } else {
-          setSignupCount(signupCount + 1);
-          setMessage("Thank you for signing up!");
-          setEmail(""); // clear input
-        }
-      } catch (err) {
-        console.error(err);
-        setMessage("Something went wrong. Please try again.");
-      }
-    };
+    } catch {
+      setMsgKey("error");
+    }
+  };
 
   return (
-    <footer className="bg-secondary/30 border-t border-border ">
-      <div className="container mx-auto px-4 py-16">
-        <div className="grid md:grid-cols-2 md:gap-40 gap-8 ml-[5%] mr-[5%]">
+    <footer className="bg-secondary/20 border-t border-border">
+      <div className="container mx-auto px-6 py-14">
+        <div className="grid md:grid-cols-3 gap-12">
           {/* Brand */}
-          <div className="col-span-2 md:col-span-1">
-            <h3 className="text-2xl font-serif font-bold text-primary mb-4">
-              Little Loops
+          <div>
+            <h3 className="text-2xl font-serif font-bold text-primary mb-3">
+              Natalie Winger
             </h3>
-            <p className="text-muted-foreground mb-6">
-              Creating beautiful handmade pieces with love.
+            <p className="text-muted-foreground text-sm leading-relaxed mb-5">
+              {t.footer.tagline}
             </p>
-            
-            <h4 className="font-semibold text-primary mt-4">Customer Care</h4>
-            <div className="flex flex-row space-x-2 mt-2">
-              <a href="https://www.instagram.com/shoplittleloopsstudio?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors space-x-2">
-                <span>Contact us through Instagram</span>
-                <Instagram className="h-5 w-5" />
-              </a>
-              {/* <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Shipping Info
-              </a>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Returns
-              </a>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Size Guide
-              </a> */}
-            </div>
-            
+            <a
+              href="https://www.instagram.com/shoplittleloopsstudio"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Instagram className="h-4 w-4" />
+              @shoplittleloopsstudio
+            </a>
           </div>
 
-          {/* Quick Links */}
-
-          {/* <div>
-            <h4 className="font-semibold text-primary mb-4">Quick Links</h4>
-            <div className="space-y-2">
-              <Link to="/" className="block text-muted-foreground hover:text-primary transition-colors">
-                Home
-              </Link>
-              <Link to="/store" className="block text-muted-foreground hover:text-primary transition-colors">
-                Shop
-              </Link>
-              <Link to="/about" className="block text-muted-foreground hover:text-primary transition-colors">
-                About
-              </Link>
-            </div>
-          </div> */}
-
-          {/* Customer Care */}
- {/*          <div className="justify-self-center">
-            <h4 className="font-semibold text-primary mb-4">Customer Care</h4>
-            <div className="space-y-2">
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Contact Us
-              </a>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Shipping Info
-              </a>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Returns
-              </a>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Size Guide
-              </a>
-            </div>
-          </div> */}
+          {/* Navigation */}
+          <div>
+            <h4 className="font-semibold text-primary mb-4 text-sm uppercase tracking-wide">
+              {t.footer.navigate}
+            </h4>
+            <nav className="space-y-2.5">
+              {[
+                { to: "/", label: t.footer.home },
+                { to: "/store", label: t.footer.shop },
+                { to: "/about", label: t.footer.about },
+                { to: "/profile", label: t.footer.myAccount },
+              ].map(({ to, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="block text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </div>
 
           {/* Newsletter */}
-          <div className="md:col-span-1">
-            <h4 className="font-semibold text-primary mb-4">Stay Connected</h4>
-            <p className="text-muted-foreground mb-4 text-sm">
-              Get the latest information from our newsletter delivered to your inbox.
+          <div>
+            <h4 className="font-semibold text-primary mb-2 text-sm uppercase tracking-wide">
+              {t.footer.stayInLoop}
+            </h4>
+            <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
+              {t.footer.newsletterDesc}
             </p>
-            <form className="space-y-2" onSubmit={handleNewsletterSignup}>
+            <form onSubmit={handleNewsletterSignup} className="space-y-2">
               <input
                 type="email"
-                placeholder="Enter your email"
+                placeholder={t.footer.emailPlaceholder}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
               <button
                 type="submit"
-                className="w-full bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
+                className="w-full bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
               >
-                Subscribe
+                {t.footer.subscribe}
               </button>
             </form>
-            {message && (
-              <p
-                className={`mt-2 ${
-                  (message === "Something went wrong. Please try again." || message === "Please enter a valid email address." || message === "This email is already signed up.")
-                    ? "text-red-600"
-                    : "var(--accent)"
-                }`}
-              >
-                {message}
-              </p>  
+            {msgKey && (
+              <p className={`mt-2 text-xs ${isError ? "text-red-600" : "text-primary"}`}>
+                {msgText[msgKey]}
+              </p>
             )}
           </div>
         </div>
 
-        <div className="border-t border-border mt-12 pt-8 text-center">
-          <p className="text-muted-foreground flex items-center justify-center gap-2">
-            Made with <Heart className="h-4 w-4 text-dusty-rose fill-current" /> by Little Loops
-          
-          <div className="flex space-x-4 ml-2 ">
-              <a href="https://www.instagram.com/shoplittleloopsstudio?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" className="text-muted-foreground hover:text-primary transition-colors">
-                <Instagram className="h-5 w-5" />
-              </a>
-            </div>
+        {/* Bottom bar */}
+        <div className="border-t border-border mt-12 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
+          <p className="flex items-center gap-1.5">
+            {t.footer.madeWith} <Heart className="h-3.5 w-3.5 text-rose-400 fill-current" /> {t.footer.byLittleLoops}
           </p>
+          <p>{t.footer.allRightsReserved(new Date().getFullYear())}</p>
         </div>
       </div>
     </footer>
