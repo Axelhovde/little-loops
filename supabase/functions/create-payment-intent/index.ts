@@ -7,6 +7,25 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
   httpClient: Stripe.createFetchHttpClient(),
 });
 
+// Flat domestic shipping rates (Norway only).
+// Brev:        ≤ 2 items, ≤ 2 kg, fits 35.3 × 25 × 2 cm  → 28 NOK
+// Liten pakke: > 2 items, ≤ 5 kg, fits 35 × 25 × 12 cm   → 76 NOK
+const FREE_SHIPPING_THRESHOLD = 1000;
+const BREV_MAX_QTY = 2;
+const BREV_PRICE_NOK = 28;
+const LITEN_PAKKE_PRICE_NOK = 76;
+const LITEN_PAKKE_BRING_PRODUCT = "5000"; // Pakke i postkassen — used for webhook booking
+
+function calculateShipping(totalQty: number, itemsTotalNOK: number) {
+  if (itemsTotalNOK >= FREE_SHIPPING_THRESHOLD) {
+    return { costNOK: 0, bringProductId: null };
+  }
+  if (totalQty <= BREV_MAX_QTY) {
+    return { costNOK: BREV_PRICE_NOK, bringProductId: null };
+  }
+  return { costNOK: LITEN_PAKKE_PRICE_NOK, bringProductId: LITEN_PAKKE_BRING_PRODUCT };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -16,17 +35,12 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Missing authorization header");
 
-    // Verify the Supabase user JWT
     const userSupabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } }
     );
-
-    const {
-      data: { user },
-      error: userError,
-    } = await userSupabase.auth.getUser();
+    const { data: { user }, error: userError } = await userSupabase.auth.getUser();
     if (userError || !user) throw new Error("Unauthorized");
 
     const body = await req.json() as {
@@ -36,16 +50,28 @@ Deno.serve(async (req) => {
         selectedSize?: string;
         photo?: string;
       }>;
+      shippingAddress: {
+        fullName: string;
+        addressLine: string;
+        postalCode: string;
+        city: string;
+        phone: string;
+      };
     };
 
     if (!body.items || body.items.length === 0) throw new Error("Cart is empty");
+    if (!body.shippingAddress?.fullName || !body.shippingAddress?.addressLine ||
+        !body.shippingAddress?.postalCode || !body.shippingAddress?.city ||
+        !body.shippingAddress?.phone) {
+      throw new Error("Incomplete shipping address");
+    }
 
-    // Use service role to read authoritative prices from DB
     const admin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // Fetch authoritative prices from DB — never trust frontend amounts
     const itemIds = [...new Set(body.items.map((i) => i.itemId))];
     const { data: dbItems, error: dbError } = await admin
       .from("items")
@@ -83,11 +109,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    let totalNOK = 0;
+    // Build order line items and total from DB prices
+    let itemsTotalNOK = 0;
+    let totalQty = 0;
     const orderLineItems = body.items.map((cartItem) => {
       const db = priceMap.get(cartItem.itemId);
       if (!db) throw new Error(`Item ${cartItem.itemId} not found`);
-      totalNOK += db.price * cartItem.quantity;
+      itemsTotalNOK += db.price * cartItem.quantity;
+      totalQty += cartItem.quantity;
       return {
         item_id: cartItem.itemId,
         quantity: cartItem.quantity,
@@ -98,14 +127,28 @@ Deno.serve(async (req) => {
       };
     });
 
-    // Create order row with pending_payment status
+    // Calculate shipping server-side — client never controls this
+    const { costNOK: shippingCostNOK, bringProductId } = calculateShipping(totalQty, itemsTotalNOK);
+    const grandTotalNOK = itemsTotalNOK + shippingCostNOK;
+
+    const postalCode = body.shippingAddress.postalCode.replace(/\D/g, "").slice(0, 4);
+
+    // Create order
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
         profile_id: user.id,
         user_email: user.email ?? "",
         status: "pending_payment",
-        total_price: totalNOK,
+        total_price: grandTotalNOK,
+        shipping_cost: shippingCostNOK,
+        shipping_name: body.shippingAddress.fullName,
+        shipping_address_line: body.shippingAddress.addressLine,
+        shipping_postal_code: postalCode,
+        shipping_city: body.shippingAddress.city,
+        shipping_country: "NO",
+        shipping_phone: body.shippingAddress.phone,
+        bring_product_id: bringProductId,
       })
       .select()
       .single();
@@ -118,9 +161,8 @@ Deno.serve(async (req) => {
 
     if (itemsError) throw new Error("Failed to create order items");
 
-    // Create Stripe PaymentIntent — amount in øre (NOK × 100)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalNOK * 100),
+      amount: Math.round(grandTotalNOK * 100), // øre
       currency: "nok",
       metadata: {
         order_id: String((order as any).order_id),
@@ -128,17 +170,13 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Store PaymentIntent ID on the order
     await admin
       .from("orders")
       .update({ stripe_payment_intent_id: paymentIntent.id })
       .eq("order_id", (order as any).order_id);
 
     return new Response(
-      JSON.stringify({
-        clientSecret: paymentIntent.client_secret,
-        orderId: (order as any).order_id,
-      }),
+      JSON.stringify({ clientSecret: paymentIntent.client_secret, orderId: (order as any).order_id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {

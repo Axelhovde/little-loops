@@ -20,7 +20,7 @@ const Hero = () => {
         </p>
 
         <h1 className="text-6xl md:text-8xl font-serif font-bold text-white mb-6 leading-none">
-          Little Loops
+          Natalie Winger
         </h1>
 
         <p className="text-lg md:text-xl text-white/80 mb-12 max-w-md mx-auto leading-relaxed font-light">

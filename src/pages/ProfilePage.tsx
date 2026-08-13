@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../helper/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { getUserOrders } from "@/services/orders.service";
+import { useLang } from "@/contexts/languageContext";
 import type { Order } from "@/interfaces/types";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -18,18 +19,21 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800",
 };
 
-const OrderCard = ({ order }: { order: Order }) => {
+const OrderCard = ({ order, t }: { order: Order; t: ReturnType<typeof useLang>["t"] }) => {
   const [expanded, setExpanded] = useState(false);
+
+  const statusLabel =
+    (t.profile.statusLabels as Record<string, string>)[order.status] ?? order.status;
 
   return (
     <div className="border border-border rounded-xl overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-5">
         <div>
           <h3 className="font-serif font-bold text-primary">
-            Order #{String(order.order_id).padStart(5, "0")}
+            {t.profile.orderPrefix}{String(order.order_id).padStart(5, "0")}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {new Date(order.created_at).toLocaleDateString("en-GB", {
+            {new Date(order.created_at).toLocaleDateString(undefined, {
               day: "numeric",
               month: "long",
               year: "numeric",
@@ -40,13 +44,13 @@ const OrderCard = ({ order }: { order: Order }) => {
           <span
             className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"}`}
           >
-            {order.status}
+            {statusLabel}
           </span>
           <span className="font-semibold text-sm">{order.total_price} NOK</span>
           <button
             onClick={() => setExpanded((p) => !p)}
             className="text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Toggle order details"
+            aria-label={t.profile.toggleOrderDetails}
           >
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
@@ -67,7 +71,7 @@ const OrderCard = ({ order }: { order: Order }) => {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">{oi.item_name}</p>
                 {oi.selected_size && (
-                  <p className="text-xs text-muted-foreground">Size: {oi.selected_size}</p>
+                  <p className="text-xs text-muted-foreground">{t.profile.size} {oi.selected_size}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
                   {oi.quantity} × {oi.price_per_item} NOK
@@ -86,6 +90,7 @@ const OrderCard = ({ order }: { order: Order }) => {
 
 const ProfilePage = () => {
   const navigate = useNavigate();
+  const { t } = useLang();
   const [userName, setUserName] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -131,8 +136,8 @@ const ProfilePage = () => {
   };
 
   const handleDeleteAccount = async () => {
-    if (!confirm("Are you sure you want to delete your account? This cannot be undone.")) return;
-    alert("Account deletion requires a server-side action. Please contact support.");
+    if (!confirm(t.profile.deleteAccountConfirm)) return;
+    alert(t.profile.deleteAccountAlert);
   };
 
   return (
@@ -156,29 +161,29 @@ const ProfilePage = () => {
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            Sign out
+            {t.profile.signOut}
           </button>
         </div>
       </section>
 
       <div className="container mx-auto max-w-4xl px-4 py-12 space-y-14">
 
-        {/* Admin shortcut — always rendered for admins, impossible to miss */}
+        {/* Admin shortcut */}
         {isAdmin && (
           <section>
             <div className="flex items-center justify-between p-5 rounded-xl border-2 border-primary bg-primary/5">
               <div className="flex items-center gap-3">
                 <LayoutDashboard className="w-5 h-5 text-primary shrink-0" />
                 <div>
-                  <p className="font-semibold text-primary text-sm">Admin Dashboard</p>
-                  <p className="text-xs text-muted-foreground">Manage products, orders, and care guides</p>
+                  <p className="font-semibold text-primary text-sm">{t.profile.adminDashboard}</p>
+                  <p className="text-xs text-muted-foreground">{t.profile.adminDesc}</p>
                 </div>
               </div>
               <button
                 onClick={() => navigate("/admin")}
                 className="bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shrink-0"
               >
-                Go to Admin →
+                {t.profile.goToAdmin}
               </button>
             </div>
           </section>
@@ -188,7 +193,7 @@ const ProfilePage = () => {
         <section>
           <h2 className="text-2xl font-serif font-bold text-primary mb-6 flex items-center gap-2.5">
             <Package className="h-5 w-5" />
-            My Orders
+            {t.profile.myOrders}
           </h2>
 
           {loadingOrders ? (
@@ -200,31 +205,31 @@ const ProfilePage = () => {
           ) : orders.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-border rounded-xl">
               <Package className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-muted-foreground mb-4">You haven't placed any orders yet.</p>
+              <p className="text-muted-foreground mb-4">{t.profile.noOrdersYet}</p>
               <button
                 onClick={() => navigate("/store")}
                 className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors text-sm font-medium"
               >
-                Start Shopping
+                {t.profile.startShopping}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               {orders.map((order) => (
-                <OrderCard key={order.order_id} order={order} />
+                <OrderCard key={order.order_id} order={order} t={t} />
               ))}
             </div>
           )}
         </section>
 
-        {/* Account Settings (hidden by default) */}
+        {/* Account Settings */}
         <section className="border-t border-border pt-8">
           <button
             onClick={() => setSettingsOpen((p) => !p)}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <Settings className="w-4 h-4" />
-            Account Settings
+            {t.profile.accountSettings}
             {settingsOpen ? (
               <ChevronUp className="w-3.5 h-3.5" />
             ) : (
@@ -234,16 +239,16 @@ const ProfilePage = () => {
 
           {settingsOpen && (
             <div className="mt-4 p-5 border border-border rounded-xl space-y-1">
-              <h3 className="text-sm font-semibold text-destructive">Delete Account</h3>
+              <h3 className="text-sm font-semibold text-destructive">{t.profile.deleteAccount}</h3>
               <p className="text-xs text-muted-foreground pb-3">
-                Permanently deletes your account and all associated data. This cannot be undone.
+                {t.profile.deleteAccountDesc}
               </p>
               <button
                 onClick={handleDeleteAccount}
                 className="flex items-center gap-2 text-xs text-destructive border border-destructive/30 px-3 py-2 rounded-lg hover:bg-destructive/5 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Delete my account
+                {t.profile.deleteAccountBtn}
               </button>
             </div>
           )}

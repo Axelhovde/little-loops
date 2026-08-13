@@ -49,17 +49,19 @@ DROP POLICY IF EXISTS "users_insert_own_orders"  ON orders;
 CREATE POLICY "users_insert_own_orders" ON orders
   FOR INSERT WITH CHECK (auth.uid() = profile_id);
 
--- All authenticated users can read all orders (admin panel).
--- NOTE: This matches the existing app security model where /admin is
--- protected by login only. Upgrade to custom claims for stricter control.
+-- Admins can read ALL orders (requires app_metadata.role = 'admin' in Supabase)
 DROP POLICY IF EXISTS "auth_read_all_orders"     ON orders;
-CREATE POLICY "auth_read_all_orders" ON orders
-  FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "admin_read_all_orders"    ON orders;
+CREATE POLICY "admin_read_all_orders" ON orders
+  FOR SELECT TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
--- Authenticated users can update order status (admin)
+-- Only admins can update orders (e.g. change status, add tracking numbers)
 DROP POLICY IF EXISTS "auth_update_orders"       ON orders;
-CREATE POLICY "auth_update_orders" ON orders
-  FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "admin_update_orders"      ON orders;
+CREATE POLICY "admin_update_orders" ON orders
+  FOR UPDATE TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ── 6. Row Level Security — order_items ──────────────────────────
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
@@ -86,10 +88,12 @@ CREATE POLICY "users_insert_own_order_items" ON order_items
     )
   );
 
--- All authenticated users can read all order_items (admin panel)
+-- Admins can read ALL order_items
 DROP POLICY IF EXISTS "auth_read_all_order_items"    ON order_items;
-CREATE POLICY "auth_read_all_order_items" ON order_items
-  FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "admin_read_all_order_items"   ON order_items;
+CREATE POLICY "admin_read_all_order_items" ON order_items
+  FOR SELECT TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ── 7. material_care_guides ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS material_care_guides (
@@ -138,9 +142,12 @@ DROP POLICY IF EXISTS "public_read_guides" ON material_care_guides;
 CREATE POLICY "public_read_guides" ON material_care_guides
   FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "auth_manage_guides" ON material_care_guides;
-CREATE POLICY "auth_manage_guides" ON material_care_guides
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "auth_manage_guides"  ON material_care_guides;
+DROP POLICY IF EXISTS "admin_manage_guides" ON material_care_guides;
+CREATE POLICY "admin_manage_guides" ON material_care_guides
+  FOR ALL TO authenticated
+  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ── 13. RLS for collections ───────────────────────────────────────
 ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
@@ -149,9 +156,12 @@ DROP POLICY IF EXISTS "public_read_collections" ON collections;
 CREATE POLICY "public_read_collections" ON collections
   FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "auth_manage_collections" ON collections;
-CREATE POLICY "auth_manage_collections" ON collections
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "auth_manage_collections"  ON collections;
+DROP POLICY IF EXISTS "admin_manage_collections" ON collections;
+CREATE POLICY "admin_manage_collections" ON collections
+  FOR ALL TO authenticated
+  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ── 14. Per-size inventory ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS item_size_quantities (
@@ -168,9 +178,12 @@ DROP POLICY IF EXISTS "public_read_size_qty" ON item_size_quantities;
 CREATE POLICY "public_read_size_qty" ON item_size_quantities
   FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "auth_manage_size_qty" ON item_size_quantities;
-CREATE POLICY "auth_manage_size_qty" ON item_size_quantities
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "auth_manage_size_qty"  ON item_size_quantities;
+DROP POLICY IF EXISTS "admin_manage_size_qty" ON item_size_quantities;
+CREATE POLICY "admin_manage_size_qty" ON item_size_quantities
+  FOR ALL TO authenticated
+  USING  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ── 15. Atomic stock-decrement RPC ───────────────────────────────
 CREATE OR REPLACE FUNCTION decrement_stock(
@@ -223,3 +236,56 @@ ALTER TABLE orders
 DROP POLICY IF EXISTS "users_update_own_orders" ON orders;
 CREATE POLICY "users_update_own_orders" ON orders
   FOR UPDATE USING (auth.uid() = profile_id);
+
+-- ── 16. shopping_cart_items: add selected_size for per-size tracking ──
+ALTER TABLE shopping_cart_items
+  ADD COLUMN IF NOT EXISTS selected_size TEXT NOT NULL DEFAULT '';
+
+-- Drop the old PK/unique constraint that only covers (cart_id, item_id)
+-- so we can create a new one that includes selected_size.
+-- Try common constraint names used by Supabase:
+ALTER TABLE shopping_cart_items
+  DROP CONSTRAINT IF EXISTS shopping_cart_items_pkey;
+ALTER TABLE shopping_cart_items
+  DROP CONSTRAINT IF EXISTS shopping_cart_items_cart_id_item_id_key;
+
+-- New unique constraint: one row per (user, item, size)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_cart_item_size'
+  ) THEN
+    ALTER TABLE shopping_cart_items
+      ADD CONSTRAINT uq_cart_item_size UNIQUE (cart_id, item_id, selected_size);
+  END IF;
+END $$;
+
+-- ── 18. Admin role setup ─────────────────────────────────────────
+-- Run this once in the Supabase SQL editor to grant admin access.
+-- Replace the email address with the actual admin email.
+--
+--   UPDATE auth.users
+--   SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
+--   WHERE email = 'your-admin@example.com';
+--
+-- After running, the user must sign out and sign back in (or refresh their
+-- JWT) for the new role to take effect in the browser.
+-- The app_metadata.role claim is checked by:
+--   • AdminRoute in src/App.tsx  (frontend guard)
+--   • RLS policies on orders, order_items, material_care_guides,
+--     collections, and item_size_quantities  (database guard)
+
+-- ── 17. orders: shipping address + Bring tracking columns ──
+-- Stores only the minimum personal data needed for delivery (GDPR data minimisation).
+-- Retained for the order lifetime to satisfy Norwegian accounting law (regnskapsloven § 13, 5 years).
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS shipping_name TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_address_line TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_postal_code TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_city TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_country TEXT NOT NULL DEFAULT 'NO',
+  ADD COLUMN IF NOT EXISTS shipping_phone TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_cost INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS bring_product_id TEXT,
+  ADD COLUMN IF NOT EXISTS bring_consignment_number TEXT,
+  ADD COLUMN IF NOT EXISTS bring_label_url TEXT;

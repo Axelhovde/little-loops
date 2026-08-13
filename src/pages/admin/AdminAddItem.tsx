@@ -65,6 +65,9 @@ const AdminAddItem = () => {
   const [quantity, setQuantity] = useState<number>(1);
   const [itemType, setItemType] = useState("necklace");
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>({});
+  const [customSizes, setCustomSizes] = useState<string[]>([]);
+  const [customSizeInput, setCustomSizeInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [colors, setColors] = useState<ColorImages[]>([]);
   const [newColor, setNewColor] = useState("");
@@ -89,14 +92,53 @@ const AdminAddItem = () => {
     getCollections().then(setCollections).catch(() => {});
   }, []);
 
+  const presetSizes =
+    itemType === "knitting_pattern" ? CLOTHING_SIZES :
+    (itemType === "necklace" || itemType === "bracelet") ? NECKLACE_SIZES :
+    [];
+
   const toggleSize = (size: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-    );
+    setSelectedSizes((prev) => {
+      if (prev.includes(size)) {
+        setSizeQuantities((q) => { const n = { ...q }; delete n[size]; return n; });
+        return prev.filter((s) => s !== size);
+      }
+      setSizeQuantities((q) => ({ ...q, [size]: q[size] ?? 1 }));
+      return [...prev, size];
+    });
   };
 
+  const addCustomSize = () => {
+    const s = customSizeInput.trim();
+    if (!s || customSizes.includes(s) || NECKLACE_SIZES.includes(s) || CLOTHING_SIZES.includes(s)) return;
+    setCustomSizes((prev) => [...prev, s]);
+    setSelectedSizes((prev) => [...prev, s]);
+    setSizeQuantities((q) => ({ ...q, [s]: 1 }));
+    setCustomSizeInput("");
+  };
+
+  const removeCustomSize = (size: string) => {
+    setCustomSizes((prev) => prev.filter((s) => s !== size));
+    setSelectedSizes((prev) => prev.filter((s) => s !== size));
+    setSizeQuantities((q) => { const n = { ...q }; delete n[size]; return n; });
+  };
+
+  const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  const MAX_IMAGE_SIZE_MB = 10;
+
   const handleFiles = (files: FileList, colorIndex: number) => {
-    const newImages = Array.from(files).map((file) => {
+    const validFiles = Array.from(files).filter((file) => {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        alert(`"${file.name}" is not a supported image type. Use JPEG, PNG, WebP, or GIF.`);
+        return false;
+      }
+      if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+        alert(`"${file.name}" exceeds the ${MAX_IMAGE_SIZE_MB} MB limit.`);
+        return false;
+      }
+      return true;
+    });
+    const newImages = validFiles.map((file) => {
       const preview = URL.createObjectURL(file);
       return { id: preview, file, preview };
     });
@@ -163,21 +205,40 @@ const AdminAddItem = () => {
     setColors((prev) => prev.filter((_, i) => i !== colorIndex));
   };
 
+  const validateForm = (): string | null => {
+    const t = title.trim();
+    const d = description.trim();
+    if (!t || t.length > 200) return "Title must be 1–200 characters.";
+    if (!d || d.length > 5000) return "Description must be 1–5000 characters.";
+    if (price === "" || Number(price) <= 0 || Number(price) > 1_000_000)
+      return "Price must be between 0.01 and 1 000 000 NOK.";
+    if (!Number.isInteger(Number(price) * 100))
+      return "Price can have at most two decimal places.";
+    if (quantity < 0) return "Quantity cannot be negative.";
+    if (colors.length === 0) return "Add at least one color.";
+    return null;
+  };
+
   const handleAddItem = async () => {
-    if (!title || !description || price === "" || colors.length === 0) {
-      alert("Please fill in all required fields and add at least one color.");
+    const validationError = validateForm();
+    if (validationError) {
+      alert(validationError);
       return;
     }
     setLoading(true);
 
     try {
+      const totalQuantity = selectedSizes.length > 0
+        ? selectedSizes.reduce((sum, s) => sum + (sizeQuantities[s] ?? 0), 0)
+        : quantity;
+
       const { data: newItem, error: itemError } = await supabase
         .from("items")
         .insert({
           item_name: title,
           description,
           price,
-          quantity,
+          quantity: totalQuantity,
           item_type: itemType,
           sizes: selectedSizes,
           material_care_id: selectedGuideId !== "" ? selectedGuideId : null,
@@ -188,6 +249,13 @@ const AdminAddItem = () => {
         .single();
       if (itemError) throw itemError;
       const itemId = newItem.item_id;
+
+      if (selectedSizes.length > 0) {
+        const { error: sizeError } = await supabase.from("item_size_quantities").insert(
+          selectedSizes.map((size) => ({ item_id: itemId, size, quantity: sizeQuantities[size] ?? 0 }))
+        );
+        if (sizeError) throw sizeError;
+      }
 
       for (const color of colors) {
         let colorId = color.colorId;
@@ -295,13 +363,19 @@ const AdminAddItem = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Quantity in stock</label>
-                  <input
-                    type="number"
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
-                    min="0"
-                  />
+                  {selectedSizes.length > 0 ? (
+                    <div className="w-full border rounded-lg px-3 py-2 bg-gray-50 text-sm text-muted-foreground">
+                      {selectedSizes.reduce((s, sz) => s + (sizeQuantities[sz] ?? 0), 0)} (from sizes)
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      value={quantity}
+                      onChange={(e) => setQuantity(Number(e.target.value))}
+                      min="0"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -400,32 +474,107 @@ const AdminAddItem = () => {
 
           {/* Sizes */}
           <section>
-            <h2 className="font-semibold text-lg mb-3 border-b pb-2">
-              Available Sizes
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {(itemType === "knitting_pattern" ? CLOTHING_SIZES : NECKLACE_SIZES).map((size) => {
-                const active = selectedSizes.includes(size);
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => toggleSize(size)}
-                    className={`px-4 py-2 rounded border text-sm transition ${
-                      active
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-muted-foreground hover:border-foreground"
-                    }`}
-                  >
-                    {size}
-                  </button>
-                );
-              })}
-            </div>
-            {selectedSizes.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Selected: {selectedSizes.join(", ")}
+            <h2 className="font-semibold text-lg mb-3 border-b pb-2">Available Sizes</h2>
+
+            {presetSizes.length > 0 ? (
+              <div className="mb-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                  {itemType === "knitting_pattern" ? "Clothing sizes" : "Standard lengths"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {presetSizes.map((size) => {
+                    const active = selectedSizes.includes(size);
+                    return (
+                      <button
+                        key={size} type="button" onClick={() => toggleSize(size)}
+                        className={`px-4 py-2 rounded border text-sm transition ${
+                          active ? "bg-primary text-primary-foreground border-primary"
+                                 : "border-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-4">
+                No standard sizes for this type — add custom sizes below.
               </p>
+            )}
+
+            {/* Custom sizes */}
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Custom sizes</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {customSizes.map((size) => {
+                  const active = selectedSizes.includes(size);
+                  return (
+                    <div key={size} className="flex items-stretch">
+                      <button
+                        type="button" onClick={() => toggleSize(size)}
+                        className={`px-3 py-1.5 rounded-l border text-sm transition ${
+                          active ? "bg-primary text-primary-foreground border-primary"
+                                 : "border-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                      <button
+                        type="button" onClick={() => removeCustomSize(size)}
+                        className="px-2 py-1.5 rounded-r border border-l-0 border-muted-foreground text-sm text-red-500 hover:bg-red-50 transition"
+                        title="Remove custom size"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="e.g. One Size, 7 inches, 16 cm…"
+                  value={customSizeInput}
+                  onChange={(e) => setCustomSizeInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCustomSize()}
+                />
+                <button
+                  type="button" onClick={addCustomSize}
+                  className="bg-secondary text-secondary-foreground px-4 py-2 rounded-lg text-sm hover:bg-secondary/80 transition shrink-0"
+                >
+                  Add size
+                </button>
+              </div>
+            </div>
+
+            {/* Per-size quantities */}
+            {selectedSizes.length > 0 && (
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <p className="text-sm font-medium mb-3">Quantity per size</p>
+                <div className="space-y-2">
+                  {selectedSizes.map((size) => (
+                    <div key={size} className="flex items-center gap-3">
+                      <span className="w-20 text-sm font-mono text-right shrink-0">{size}</span>
+                      <input
+                        type="number" min="0"
+                        value={sizeQuantities[size] ?? 0}
+                        onChange={(e) => setSizeQuantities((q) => ({ ...q, [size]: Math.max(0, Number(e.target.value)) }))}
+                        className="w-24 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="text-xs text-muted-foreground">stk</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3 pt-2 border-t">
+                    <span className="w-20 text-sm text-right shrink-0 text-muted-foreground">Total</span>
+                    <span className="text-sm font-semibold">
+                      {selectedSizes.reduce((s, sz) => s + (sizeQuantities[sz] ?? 0), 0)} stk
+                    </span>
+                  </div>
+                </div>
+              </div>
             )}
           </section>
 

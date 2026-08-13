@@ -5,6 +5,8 @@ import { ShoppingBag, Search, Menu, UserRound, X, Minus, Plus, ShoppingCart } fr
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../helper/supabaseClient";
 import { useCart } from "@/contexts/cartContext";
+import { useNav } from "@/contexts/navContext";
+import { useLang } from "@/contexts/languageContext";
 import {
   Sheet,
   SheetContent,
@@ -12,14 +14,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-const CartOverlay = ({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) => {
+const CartOverlay = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const { items, updateQuantity, removeItem, totalPrice } = useCart();
+  const { t } = useLang();
   const navigate = useNavigate();
 
   const handleCheckout = () => {
@@ -33,16 +30,16 @@ const CartOverlay = ({
         <SheetHeader className="border-b pb-4">
           <SheetTitle className="flex items-center gap-2 font-serif text-xl">
             <ShoppingCart className="h-5 w-5" />
-            Your Cart
+            {t.nav.cartTitle}
           </SheetTitle>
         </SheetHeader>
 
         {items.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <ShoppingBag className="h-12 w-12 opacity-30" />
-            <p>Your cart is empty</p>
+            <p>{t.nav.cartEmpty}</p>
             <Button variant="outline" onClick={() => { onClose(); navigate("/jewelry"); }}>
-              Browse Shop
+              {t.nav.browseShop}
             </Button>
           </div>
         ) : (
@@ -60,14 +57,12 @@ const CartOverlay = ({
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{item.title}</p>
                     {item.selectedSize && (
-                      <p className="text-xs text-muted-foreground">Size: {item.selectedSize}</p>
+                      <p className="text-xs text-muted-foreground">{t.nav.size}: {item.selectedSize}</p>
                     )}
                     <p className="text-sm text-muted-foreground">{item.price} NOK</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
+                        size="icon" variant="ghost" className="h-6 w-6"
                         onClick={() => updateQuantity(item.itemId, item.quantity - 1, item.selectedSize)}
                         disabled={item.quantity <= 1}
                       >
@@ -75,9 +70,7 @@ const CartOverlay = ({
                       </Button>
                       <span className="w-5 text-center text-sm">{item.quantity}</span>
                       <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
+                        size="icon" variant="ghost" className="h-6 w-6"
                         onClick={() => updateQuantity(item.itemId, item.quantity + 1, item.selectedSize)}
                         disabled={item.stockQuantity !== undefined && item.quantity >= item.stockQuantity}
                       >
@@ -88,8 +81,7 @@ const CartOverlay = ({
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <p className="text-sm font-medium">{item.price * item.quantity} NOK</p>
                     <Button
-                      size="icon"
-                      variant="ghost"
+                      size="icon" variant="ghost"
                       className="h-6 w-6 text-muted-foreground hover:text-destructive"
                       onClick={() => removeItem(item.itemId, item.selectedSize)}
                     >
@@ -102,14 +94,14 @@ const CartOverlay = ({
 
             <div className="border-t pt-4 space-y-3">
               <div className="flex justify-between font-medium">
-                <span>Total</span>
+                <span>{t.nav.total}</span>
                 <span>{totalPrice} NOK</span>
               </div>
               <Button className="w-full" size="lg" onClick={handleCheckout}>
-                Go to Checkout
+                {t.nav.goToCheckout}
               </Button>
               <Button variant="outline" className="w-full" onClick={onClose}>
-                Continue Shopping
+                {t.nav.continueShopping}
               </Button>
             </div>
           </>
@@ -129,8 +121,8 @@ const Navigation = () => {
   const [userName, setUserName] = useState<string | null>(null);
   const isHomePage = location.pathname === "/";
   const [scrolled, setScrolled] = useState(false);
-  const [navVisible, setNavVisible] = useState(true);
-  const lastScrollYRef = useRef(0);
+  const { navVisible, setNavVisible, lastScrollYRef } = useNav();
+  const { lang, setLang, t } = useLang();
   const { items } = useCart();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -176,9 +168,7 @@ const Navigation = () => {
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserName(user.user_metadata?.full_name || user.email || null);
-      }
+      if (user) setUserName(user.user_metadata?.full_name || user.email || null);
     };
     getUser();
 
@@ -194,9 +184,7 @@ const Navigation = () => {
     const handleScroll = () => {
       const currentY = window.scrollY;
       const diff = currentY - lastScrollYRef.current;
-
       setScrolled(currentY > 80);
-
       if (currentY < 80) {
         setNavVisible(true);
       } else if (diff > 6) {
@@ -204,7 +192,6 @@ const Navigation = () => {
       } else if (diff < -4) {
         setNavVisible(true);
       }
-
       lastScrollYRef.current = currentY;
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -212,6 +199,13 @@ const Navigation = () => {
   }, []);
 
   const isTransparent = isHomePage && !scrolled;
+
+  const navLinks = [
+    { to: "/", label: t.nav.home },
+    { to: "/jewelry", label: t.nav.jewelry },
+    /* { to: "/knitting", label: t.nav.patterns }, */
+    { to: "/about", label: t.nav.about },
+  ];
 
   return (
     <>
@@ -231,17 +225,12 @@ const Navigation = () => {
               to="/"
               className={`text-2xl font-serif font-bold transition-colors ${isTransparent ? "text-white" : "text-primary"}`}
             >
-              Little Loops
+              Natalie Winger
             </Link>
 
-            {/* Desktop Navigation */}
+            {/* Desktop nav links */}
             <div className="hidden md:flex items-center space-x-8">
-              {[
-                { to: "/", label: "Home" },
-                { to: "/jewelry", label: "Jewelry" },
-                { to: "/knitting", label: "Patterns" },
-                { to: "/about", label: "About" },
-              ].map(({ to, label }) => (
+              {navLinks.map(({ to, label }) => (
                 <Link
                   key={to}
                   to={to}
@@ -256,12 +245,12 @@ const Navigation = () => {
               ))}
             </div>
 
-            {/* Right side icons */}
+            {/* Right-side icons */}
             <div className="flex items-center space-x-4 pt-2">
               {[
                 {
                   icon: <Search className="h-5 w-5" />,
-                  label: "Search",
+                  label: t.nav.search,
                   onClick: handleSearchToggle,
                   active: isSearchOpen,
                 },
@@ -276,13 +265,13 @@ const Navigation = () => {
                       )}
                     </div>
                   ),
-                  label: "Cart",
+                  label: t.nav.cart,
                   onClick: () => setIsCartOpen(true),
                   active: false,
                 },
                 {
                   icon: <UserRound className="h-5 w-5" />,
-                  label: userName || "Log In",
+                  label: userName || t.nav.login,
                   onClick: () => navigate(userName ? "/profile" : "/login"),
                   active: false,
                 },
@@ -303,6 +292,19 @@ const Navigation = () => {
                 </Button>
               ))}
 
+              {/* Language toggle */}
+              <button
+                onClick={() => setLang(lang === "en" ? "no" : "en")}
+                aria-label={`Switch to ${lang === "en" ? "Norwegian" : "English"}`}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors
+                  ${isTransparent
+                    ? "border-white/50 text-white/80 hover:border-white hover:text-white"
+                    : "border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary"
+                  }`}
+              >
+                {t.nav.langToggle}
+              </button>
+
               {/* Mobile menu button */}
               <Button
                 variant="ghost"
@@ -318,17 +320,14 @@ const Navigation = () => {
           {/* Search bar */}
           {isSearchOpen && (
             <div className="border-t border-border">
-              <form
-                onSubmit={handleSearchSubmit}
-                className="py-3 flex items-center gap-3"
-              >
+              <form onSubmit={handleSearchSubmit} className="py-3 flex items-center gap-3">
                 <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Input
                   ref={searchInputRef}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for necklaces, bracelets..."
-                  className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-base px-0 h-auto py-0"
+                  placeholder={lang === "no" ? "Søk etter smykker, armbånd..." : "Search for necklaces, bracelets..."}
+                  className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-base px-2 h-auto py-1"
                 />
                 <button
                   type="button"
@@ -342,16 +341,11 @@ const Navigation = () => {
             </div>
           )}
 
-          {/* Mobile Navigation */}
+          {/* Mobile nav menu */}
           {isMenuOpen && (
             <div className="md:hidden py-4 border-t border-border">
               <div className="flex flex-col space-y-4">
-                {[
-                  { to: "/", label: "Home" },
-                  { to: "/jewelry", label: "Jewelry" },
-                  { to: "/knitting", label: "Patterns" },
-                  { to: "/about", label: "About" },
-                ].map(({ to, label }) => (
+                {navLinks.map(({ to, label }) => (
                   <Link
                     key={to}
                     to={to}

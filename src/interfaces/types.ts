@@ -1,5 +1,3 @@
-// src/interfaces/types.ts
-
 export const NECKLACE_SIZES = ['14"', '16"', '18"', '20"', '22"', '24"'];
 export const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 export const ITEM_TYPES = ['necklace', 'bracelet', 'earring', 'other', 'knitting_pattern'] as const;
@@ -79,6 +77,22 @@ export interface CartItem {
   photo: string;
   selectedSize?: string;
   stockQuantity?: number;
+  hasSizes?: boolean;
+}
+
+export interface ShippingAddress {
+  fullName: string;
+  addressLine: string;
+  postalCode: string;
+  city: string;
+  phone: string;
+}
+
+export interface ShippingRate {
+  productId: string;
+  productName: string;
+  priceNOK: number;
+  deliveryDays: string;
 }
 
 export interface CartItemDB {
@@ -90,10 +104,10 @@ export interface CartItemDB {
 
 export interface OrderItem {
   order_item_id: number;
-  order_id: number;        // serial integer in DB
+  order_id: number;
   item_id?: number;
   quantity: number;
-  price_per_item: number;  // existing column name in DB
+  price_per_item: number;
   selected_size?: string;
   item_name: string;
   item_photo?: string;
@@ -114,14 +128,14 @@ export interface MaterialCareGuide {
 }
 
 export interface Order {
-  order_id: number;        // serial integer in DB
-  profile_id: string;      // references profiles.id (= auth.users.id)
+  order_id: number;
+  profile_id: string;
   user_email: string;
   status: 'pending_payment' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   payment_status?: 'paid' | 'failed' | null;
   stripe_payment_intent_id?: string | null;
   total_price: number;
-  order_date: string;      // existing column name in DB
+  order_date: string;
   created_at: string;
   order_items?: OrderItem[];
 }

@@ -1,15 +1,11 @@
 import { supabase } from "@/helper/supabaseClient";
 
-/* -------------------- COLORS TABLE -------------------- */
-
-
-/** Reassign an item_color to a new color and move all photos */
+/** Reassign an item_color to a different color, re-linking all its photos */
 export const reassignColorVariant = async (
   item_color_id: number,
   new_color_id: number
 ) => {
   try {
-    // 1. Fetch all photos for this item_color
     const { data: oldPhotos, error: fetchError } = await supabase
       .from("item_photos")
       .select("*")
@@ -17,7 +13,6 @@ export const reassignColorVariant = async (
 
     if (fetchError) throw fetchError;
 
-    // 2. Update the item_color row
     const { data: updatedItemColor, error: updateError } = await supabase
       .from("item_colors")
       .update({ color_id: new_color_id })
@@ -27,7 +22,6 @@ export const reassignColorVariant = async (
 
     if (updateError) throw updateError;
 
-    // 3. Reassign all photos to the updated item_color (now with new color)
     for (const photo of oldPhotos) {
       const { error: photoError } = await supabase
         .from("item_photos")
@@ -64,7 +58,7 @@ export const addColor = async (color_name: string, color_hex: string) => {
     .single();
 
   if (error) throw error;
-  return data; // returns { color_id, color_name, color_hex }
+  return data;
 };
 
 /** Update an existing color */
@@ -95,8 +89,6 @@ export const deleteColor = async (color_id: number) => {
 };
 
 
-/* -------------------- ITEM COLORS TABLE -------------------- */
-
 /** Link a color to an item */
 export const assignColorToItem = async (item_id: number, color_id: number) => {
   const { data, error } = await supabase
@@ -106,7 +98,7 @@ export const assignColorToItem = async (item_id: number, color_id: number) => {
     .single();
 
   if (error) throw error;
-  return data; // returns item_color_id etc.
+  return data;
 };
 
 /** Change the color assigned to an item_color row */

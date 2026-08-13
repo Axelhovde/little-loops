@@ -1,10 +1,10 @@
 import { supabase } from "@/helper/supabaseClient";
-import type { CartItem } from "@/interfaces/types";
+import type { CartItem, ShippingAddress } from "@/interfaces/types";
 
-export async function createPaymentIntent(items: CartItem[]): Promise<{
-  clientSecret: string;
-  orderId: number;
-}> {
+export async function createPaymentIntent(
+  items: CartItem[],
+  shippingAddress: ShippingAddress
+): Promise<{ clientSecret: string; orderId: number }> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -26,6 +26,7 @@ export async function createPaymentIntent(items: CartItem[]): Promise<{
         selectedSize: i.selectedSize,
         photo: i.photo,
       })),
+      shippingAddress,
     }),
   });
 

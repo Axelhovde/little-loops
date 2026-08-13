@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { NECKLACE_SIZES, CLOTHING_SIZES, ITEM_TYPES } from "@/interfaces/types";
+import { supabase } from "../../helper/supabaseClient";
 import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import { deleteItem } from "@/services/items.service";
 
@@ -28,6 +29,9 @@ const AdminUpdateItem = () => {
 
   const [item, setItem] = useState<AdminItem | null>(null);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>({});
+  const [customSizes, setCustomSizes] = useState<string[]>([]);
+  const [customSizeInput, setCustomSizeInput] = useState("");
   const [itemColors, setItemColors] = useState<AdminItemColor[]>([]);
   const [photos, setPhotos] = useState<AdminPhoto[]>([]);
   const [allColors, setAllColors] = useState<any[]>([]);
@@ -54,9 +58,23 @@ const AdminUpdateItem = () => {
         setItem(result.item || null);
         setItemColors(result.itemColors || []);
         setPhotos(photosResult || []);
-        setSelectedSizes(result.item?.sizes ?? []);
+        const sizes = result.item?.sizes ?? [];
+        setSelectedSizes(sizes);
         setSelectedGuideId(result.item?.material_care_id ?? "");
         setSelectedCollectionId(result.item?.collection_id ?? "");
+
+        // Load per-size quantities
+        const { data: sizeQtyRows } = await supabase
+          .from("item_size_quantities")
+          .select("size, quantity")
+          .eq("item_id", itemId);
+        const loadedQties: Record<string, number> = {};
+        for (const row of sizeQtyRows ?? []) loadedQties[row.size] = row.quantity;
+        setSizeQuantities(loadedQties);
+
+        // Detect custom sizes (not in either preset list)
+        const allPresets = [...NECKLACE_SIZES, ...CLOTHING_SIZES];
+        setCustomSizes(sizes.filter((s) => !allPresets.includes(s)));
       } catch (err) {
         console.error("Error loading item data:", err);
         alert("Failed loading item data (check console).");
@@ -67,10 +85,36 @@ const AdminUpdateItem = () => {
     if (!isNaN(itemId)) load();
   }, [itemId]);
 
+  const currentItemType = item?.item_type ?? "necklace";
+  const presetSizes =
+    currentItemType === "knitting_pattern" ? CLOTHING_SIZES :
+    (currentItemType === "necklace" || currentItemType === "bracelet") ? NECKLACE_SIZES :
+    [];
+
   const toggleSize = (size: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-    );
+    setSelectedSizes((prev) => {
+      if (prev.includes(size)) {
+        setSizeQuantities((q) => { const n = { ...q }; delete n[size]; return n; });
+        return prev.filter((s) => s !== size);
+      }
+      setSizeQuantities((q) => ({ ...q, [size]: q[size] ?? 1 }));
+      return [...prev, size];
+    });
+  };
+
+  const addCustomSize = () => {
+    const s = customSizeInput.trim();
+    if (!s || customSizes.includes(s) || NECKLACE_SIZES.includes(s) || CLOTHING_SIZES.includes(s)) return;
+    setCustomSizes((prev) => [...prev, s]);
+    setSelectedSizes((prev) => [...prev, s]);
+    setSizeQuantities((q) => ({ ...q, [s]: q[s] ?? 1 }));
+    setCustomSizeInput("");
+  };
+
+  const removeCustomSize = (size: string) => {
+    setCustomSizes((prev) => prev.filter((s) => s !== size));
+    setSelectedSizes((prev) => prev.filter((s) => s !== size));
+    setSizeQuantities((q) => { const n = { ...q }; delete n[size]; return n; });
   };
 
   const handleDelete = async () => {
@@ -88,11 +132,38 @@ const AdminUpdateItem = () => {
     if (!item) return;
     setSaving(true);
     try {
+      let totalQuantity = item.quantity;
+
+      if (selectedSizes.length > 0) {
+        // Upsert quantities for all selected sizes
+        for (const size of selectedSizes) {
+          await supabase.from("item_size_quantities").upsert(
+            { item_id: itemId, size, quantity: sizeQuantities[size] ?? 0 },
+            { onConflict: "item_id,size" }
+          );
+        }
+        // Delete quantities for sizes that were removed
+        const { data: existingRows } = await supabase
+          .from("item_size_quantities").select("size").eq("item_id", itemId);
+        const removedSizes = (existingRows ?? [])
+          .map((r: any) => r.size)
+          .filter((s: string) => !selectedSizes.includes(s));
+        if (removedSizes.length > 0) {
+          await supabase.from("item_size_quantities").delete()
+            .eq("item_id", itemId).in("size", removedSizes);
+        }
+        totalQuantity = selectedSizes.reduce((sum, s) => sum + (sizeQuantities[s] ?? 0), 0);
+      } else {
+        // No sizes — delete all size quantity rows if any
+        await supabase.from("item_size_quantities").delete().eq("item_id", itemId);
+        totalQuantity = item.quantity;
+      }
+
       await updateItem(itemId, {
         item_name: item.item_name,
         description: item.description,
         price: item.price,
-        quantity: item.quantity,
+        quantity: totalQuantity,
         item_type: item.item_type,
         sizes: selectedSizes,
         material_care_id: selectedGuideId !== "" ? selectedGuideId : null,
@@ -376,32 +447,121 @@ const AdminUpdateItem = () => {
 
           {/* Sizes */}
           <div className="bg-white rounded-xl shadow p-6">
-            <h2 className="font-semibold text-lg border-b pb-2 mb-4">
-              Available Sizes
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {(item?.item_type === "knitting_pattern" ? CLOTHING_SIZES : NECKLACE_SIZES).map((size) => {
-                const active = selectedSizes.includes(size);
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    onClick={() => toggleSize(size)}
-                    className={`px-4 py-2 rounded border text-sm transition ${
-                      active
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "border-muted-foreground hover:border-foreground"
-                    }`}
-                  >
-                    {size}
-                  </button>
-                );
-              })}
-            </div>
-            {selectedSizes.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Selected: {selectedSizes.join(", ")}
+            <h2 className="font-semibold text-lg border-b pb-2 mb-4">Available Sizes</h2>
+
+            {presetSizes.length > 0 ? (
+              <div className="mb-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                  {currentItemType === "knitting_pattern" ? "Clothing sizes" : "Standard lengths"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {presetSizes.map((size) => {
+                    const active = selectedSizes.includes(size);
+                    return (
+                      <button
+                        key={size} type="button" onClick={() => toggleSize(size)}
+                        className={`px-4 py-2 rounded border text-sm transition ${
+                          active ? "bg-primary text-primary-foreground border-primary"
+                                 : "border-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-4">
+                No standard sizes for this type — add custom sizes below.
               </p>
+            )}
+
+            {/* Custom sizes */}
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Custom sizes</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {customSizes.map((size) => {
+                  const active = selectedSizes.includes(size);
+                  return (
+                    <div key={size} className="flex items-stretch">
+                      <button
+                        type="button" onClick={() => toggleSize(size)}
+                        className={`px-3 py-1.5 rounded-l border text-sm transition ${
+                          active ? "bg-primary text-primary-foreground border-primary"
+                                 : "border-muted-foreground hover:border-foreground"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                      <button
+                        type="button" onClick={() => removeCustomSize(size)}
+                        className="px-2 py-1.5 rounded-r border border-l-0 border-muted-foreground text-sm text-red-500 hover:bg-red-50 transition"
+                        title="Remove custom size"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="e.g. One Size, 7 inches, 16 cm…"
+                  value={customSizeInput}
+                  onChange={(e) => setCustomSizeInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCustomSize()}
+                />
+                <button
+                  type="button" onClick={addCustomSize}
+                  className="bg-secondary text-secondary-foreground px-4 py-2 rounded-lg text-sm hover:bg-secondary/80 transition shrink-0"
+                >
+                  Add size
+                </button>
+              </div>
+            </div>
+
+            {/* Per-size quantities */}
+            {selectedSizes.length > 0 && (
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <p className="text-sm font-medium mb-3">Quantity per size</p>
+                <div className="space-y-2">
+                  {selectedSizes.map((size) => (
+                    <div key={size} className="flex items-center gap-3">
+                      <span className="w-20 text-sm font-mono text-right shrink-0">{size}</span>
+                      <input
+                        type="number" min="0"
+                        value={sizeQuantities[size] ?? 0}
+                        onChange={(e) => setSizeQuantities((q) => ({ ...q, [size]: Math.max(0, Number(e.target.value)) }))}
+                        className="w-24 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="text-xs text-muted-foreground">stk</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3 pt-2 border-t">
+                    <span className="w-20 text-sm text-right shrink-0 text-muted-foreground">Total</span>
+                    <span className="text-sm font-semibold">
+                      {selectedSizes.reduce((s, sz) => s + (sizeQuantities[sz] ?? 0), 0)} stk
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* No sizes selected — show direct quantity edit */}
+            {selectedSizes.length === 0 && (
+              <div className="flex items-center gap-3 mt-2">
+                <label className="text-sm font-medium shrink-0">Total quantity in stock</label>
+                <input
+                  type="number" min="0"
+                  value={item?.quantity ?? 0}
+                  onChange={(e) => setItem((s: any) => ({ ...s, quantity: Number(e.target.value) }))}
+                  className="w-28 border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <span className="text-xs text-muted-foreground">stk</span>
+              </div>
             )}
           </div>
 

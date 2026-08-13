@@ -4,6 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { NavProvider } from "@/contexts/navContext";
+import { LanguageProvider } from "@/contexts/languageContext";
 import { supabase } from "./helper/supabaseClient";
 import Index from "./pages/Index";
 import StorePage from "./pages/StorePage";
@@ -44,10 +46,31 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   return isLoggedIn ? children : <Navigate to="/login" replace />;
 };
 
+// Requires app_metadata.role = 'admin' set via Supabase admin panel or SQL:
+//   UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
+//   WHERE email = 'your-admin@email.com';
+const AdminRoute = ({ children }: { children: JSX.Element }) => {
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      const role = (user?.app_metadata as Record<string, unknown> | undefined)?.role;
+      setIsAdmin(role === "admin");
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <p className="p-8 text-center text-muted-foreground">Loading...</p>;
+  return isAdmin ? children : <Navigate to="/login" replace />;
+};
+
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <LanguageProvider>
+        <NavProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -73,84 +96,85 @@ const App = () => {
               }
             />
 
-            {/* Protected: admin */}
+            {/* Protected: admin only (requires app_metadata.role = 'admin') */}
             <Route
               path="/admin"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminDashboard />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/add-item"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminAddItem />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/AdminItemOverview"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminItemOverview />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/AdminUpdateItem/:id"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminUpdateItem />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/inventory"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminInventory />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/orders"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminOrders />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/stats"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminStats />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
-
             <Route
               path="/admin/material-care"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminMaterialCare />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
             <Route
               path="/admin/collections"
               element={
-                <ProtectedRoute>
+                <AdminRoute>
                   <AdminCollections />
-                </ProtectedRoute>
+                </AdminRoute>
               }
             />
 
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        </NavProvider>
+        </LanguageProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

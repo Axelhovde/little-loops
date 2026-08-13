@@ -7,7 +7,6 @@ export async function placeOrder(
   items: CartItem[],
   totalPrice: number
 ): Promise<number> {
-  // Insert the order — profile_id matches profiles.id (= auth.users.id)
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
@@ -21,7 +20,6 @@ export async function placeOrder(
 
   if (orderError) throw orderError;
 
-  // Insert each line item using the existing price_per_item column
   const orderItems = items.map((item) => ({
     order_id: order.order_id,
     item_id: item.itemId,
@@ -38,7 +36,6 @@ export async function placeOrder(
 
   if (itemsError) throw itemsError;
 
-  // Clear the user's cart (cart_id = profiles.id = auth.users.id)
   await supabase
     .from("shopping_cart_items")
     .delete()

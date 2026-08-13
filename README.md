@@ -1,43 +1,63 @@
-# Welcome to your Lovable project
+# Natalie Winger
 
-## Project info
+Webshop for handmade beaded jewellery. Built with React + Supabase + Stripe, deployed on GitHub Pages at [nataliewinger.com](https://www.nataliewinger.com).
 
+## Stack
 
-# Step 1: Install the necessary dependencies.
-npm i
+- **Frontend** — React 18, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend** — Supabase (Postgres + Auth + Storage + Edge Functions)
+- **Payments** — Stripe (Payment Intents)
+- **Shipping** — Bring API for rates and postal code validation
+- **Email** — Nodemailer via a Supabase Edge Function (Gmail SMTP)
 
-# Step 2: Start the development server with auto-reloading and an instant preview.
+## Getting started
+
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+You'll need a `.env` file with:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_STRIPE_PUBLISHABLE_KEY=...
+```
 
-**Use GitHub Codespaces**
+The Edge Functions need their own secrets set in Supabase:
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `SUPPORT_EMAIL`, `BRING_API_UID`, `BRING_API_KEY`.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Project structure
 
-## What technologies are used for this project?
+```
+src/
+  pages/          # Route-level components
+  components/     # Shared UI pieces
+  contexts/       # Cart, language, nav state
+  services/       # Supabase query functions
+  interfaces/     # TypeScript types
+  i18n/           # Norwegian/English translations
 
-This project is built with:
+supabase/
+  functions/      # Edge Functions (payments, webhooks, shipping, email)
+  migration.sql   # DB schema
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Admin access
 
+Admin routes are protected by `app_metadata.role = 'admin'` on the Supabase user. Set it with:
 
-## How to deploy the project?
+```sql
+UPDATE auth.users
+SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
+WHERE email = 'your@email.com';
+```
 
-The project uses github pages, and require the following commands run from the main branch:
+## Deploying
 
-- npm run build
-- npm run deploy
+```bash
+npm run deploy
+```
+
+Builds and pushes to the `gh-pages` branch. The CNAME file points GitHub Pages to `nataliewinger.com`.

@@ -33,53 +33,53 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!userId) return;
 
-    const loadCart = async () => {
-      const data = await getCartItems(userId);
-      const mapped: CartItem[] = (data ?? []).map((row: any) => ({
-        itemId: row.item_id,
-        title: row.items?.item_name ?? "",
-        price: row.items?.price ?? 0,
-        quantity: row.quantity,
-        photo: row.items?.item_photos
-          ?.sort((a: any, b: any) => a.display_order - b.display_order)[0]
-          ?.photo_url ?? "",
-        selectedSize: row.selected_size || undefined,
-      }));
-      setItems(mapped);
-    };
+    getCartItems(userId).then((data) => {
+      const mapped: CartItem[] = (data ?? []).map((row: any) => {
+        const sizes: string[] = row.items?.sizes ?? [];
+        const selectedSize: string | undefined = row.selected_size || undefined;
+        const hasSizes = sizes.length > 0;
 
-    loadCart();
+        // Resolve stock from DB so the cart page + button can enforce limits
+        let stockQuantity: number | undefined;
+        if (hasSizes && selectedSize) {
+          const sizeRow = (row.items?.item_size_quantities ?? []).find(
+            (sq: any) => sq.size === selectedSize
+          );
+          stockQuantity = sizeRow?.quantity;
+        } else if (!hasSizes) {
+          stockQuantity = row.items?.quantity;
+        }
+
+        return {
+          itemId: row.item_id,
+          title: row.items?.item_name ?? "",
+          price: row.items?.price ?? 0,
+          quantity: row.quantity,
+          photo: row.items?.item_photos
+            ?.sort((a: any, b: any) => a.display_order - b.display_order)[0]
+            ?.photo_url ?? "",
+          selectedSize,
+          hasSizes,
+          stockQuantity,
+        };
+      });
+      setItems(mapped);
+    }).catch(console.error);
   }, [userId]);
 
-  // DB only tracks total quantity per item (not per size).
-  // In-memory state tracks per (itemId + selectedSize).
-  const getTotalQtyForItem = (
-    currentItems: CartItem[],
-    itemId: number,
-    excludeSize: string | undefined,
-    addQty: number
-  ) =>
-    currentItems
-      .filter((i) => i.itemId === itemId && i.selectedSize !== excludeSize)
-      .reduce((sum, i) => sum + i.quantity, 0) + addQty;
-
   const addItem = async (item: CartItem) => {
+    const sizeKey = item.selectedSize ?? "";
     const existing = items.find(
       (i) => i.itemId === item.itemId && i.selectedSize === item.selectedSize
     );
     const newQty = existing ? existing.quantity + item.quantity : item.quantity;
 
-    if (
-      item.stockQuantity !== undefined &&
-      newQty > item.stockQuantity
-    ) {
-      throw new Error(`Maks antall tilgjengelig er ${item.stockQuantity}`);
+    if (item.stockQuantity !== undefined && newQty > item.stockQuantity) {
+      throw new Error(`Max available quantity is ${item.stockQuantity}`);
     }
 
-    const dbQty = getTotalQtyForItem(items, item.itemId, item.selectedSize, newQty);
-
     if (userId) {
-      await upsertCartItem(userId, item.itemId, dbQty);
+      await upsertCartItem(userId, item.itemId, newQty, sizeKey);
     }
 
     setItems((prev) => {
@@ -94,22 +94,19 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
-  const updateQuantity = async (
-    itemId: number,
-    qty: number,
-    selectedSize?: string
-  ) => {
+  const updateQuantity = async (itemId: number, qty: number, selectedSize?: string) => {
     if (qty <= 0) return removeItem(itemId, selectedSize);
 
-    const stockLimit = items.find(
+    const current = items.find(
       (i) => i.itemId === itemId && i.selectedSize === selectedSize
-    )?.stockQuantity;
-    const cappedQty = stockLimit !== undefined ? Math.min(qty, stockLimit) : qty;
-
-    const dbQty = getTotalQtyForItem(items, itemId, selectedSize, cappedQty);
+    );
+    const cappedQty =
+      current?.stockQuantity !== undefined
+        ? Math.min(qty, current.stockQuantity)
+        : qty;
 
     if (userId) {
-      await upsertCartItem(userId, itemId, dbQty);
+      await upsertCartItem(userId, itemId, cappedQty, selectedSize ?? "");
     }
 
     setItems((prev) =>
@@ -122,27 +119,17 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const removeItem = async (itemId: number, selectedSize?: string) => {
-    const remaining = items.filter(
-      (i) => !(i.itemId === itemId && i.selectedSize === selectedSize)
-    );
-    const remainingQty = remaining
-      .filter((i) => i.itemId === itemId)
-      .reduce((sum, i) => sum + i.quantity, 0);
-
     if (userId) {
-      if (remainingQty > 0) {
-        await upsertCartItem(userId, itemId, remainingQty);
-      } else {
-        await removeCartItem(userId, itemId);
-      }
+      await removeCartItem(userId, itemId, selectedSize ?? "");
     }
-
-    setItems(remaining);
+    setItems((prev) =>
+      prev.filter(
+        (i) => !(i.itemId === itemId && i.selectedSize === selectedSize)
+      )
+    );
   };
 
-  const clearCart = () => {
-    setItems([]);
-  };
+  const clearCart = () => setItems([]);
 
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 

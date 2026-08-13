@@ -2,9 +2,11 @@ import { Link, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { useLang } from "@/contexts/languageContext";
 
 const NotFound = () => {
   const location = useLocation();
+  const { t } = useLang();
 
   useEffect(() => {
     console.error("404 — user tried to access:", location.pathname);
@@ -16,27 +18,26 @@ const NotFound = () => {
 
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-24 text-center">
         <p className="text-sm uppercase tracking-widest text-muted-foreground mb-4 font-medium">
-          404 — Page not found
+          {t.notFound.label}
         </p>
         <h1 className="text-6xl md:text-8xl font-serif font-bold text-primary mb-6">
-          Oops.
+          {t.notFound.title}
         </h1>
         <p className="text-lg text-muted-foreground max-w-md mb-10 leading-relaxed">
-          We couldn't find the page you're looking for. It may have moved, or the link
-          might be wrong.
+          {t.notFound.body}
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <Link
             to="/"
             className="px-8 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors"
           >
-            Go Home
+            {t.notFound.goHome}
           </Link>
           <Link
             to="/store"
             className="px-8 py-3 border border-primary text-primary rounded-xl font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
           >
-            Browse the Shop
+            {t.notFound.browseShop}
           </Link>
         </div>
       </div>

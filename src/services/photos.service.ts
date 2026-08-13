@@ -8,7 +8,6 @@ export const uploadItemPhoto = async (
   const fileExt = file.name.split(".").pop();
   const filePath = `items/${itemId}/${Date.now()}.${fileExt}`;
 
-  // ---- Upload to Supabase storage ----
   const { error: uploadError } = await supabase.storage
     .from("items")
     .upload(filePath, file);
@@ -18,11 +17,9 @@ export const uploadItemPhoto = async (
     throw new Error("Failed to upload photo");
   }
 
-  // ---- Get public URL ----
   const { data } = supabase.storage.from("items").getPublicUrl(filePath);
   const url = data.publicUrl;
 
-  // ---- Get current max display_order for this item_color ----
   const { data: existingPhotos, error: fetchError } = await supabase
     .from("item_photos")
     .select("display_order")
@@ -39,7 +36,6 @@ export const uploadItemPhoto = async (
 
   const newDisplayOrder = maxDisplayOrder + 1;
 
-  // ---- Insert into item_photos table ----
   const { data: photoRow, error: insertError } = await supabase
     .from("item_photos")
     .insert({
@@ -56,7 +52,7 @@ export const uploadItemPhoto = async (
     throw new Error("Failed to save photo record");
   }
 
-  return photoRow; // return the inserted row so frontend can update state
+  return photoRow;
 };
 
 

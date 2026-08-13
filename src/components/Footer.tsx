@@ -2,36 +2,40 @@ import { Link } from "react-router-dom";
 import { Heart, Instagram } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../helper/supabaseClient";
+import { useLang } from "@/contexts/languageContext";
+
+type MsgKey = "success" | "alreadySignedUp" | "invalidEmail" | "error" | "";
 
 const Footer = () => {
+  const { t } = useLang();
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
+  const [msgKey, setMsgKey] = useState<MsgKey>("");
 
-  const isError =
-    message === "Something went wrong. Please try again." ||
-    message === "Please enter a valid email address." ||
-    message === "This email is already signed up.";
+  const isError = msgKey === "alreadySignedUp" || msgKey === "invalidEmail" || msgKey === "error";
+
+  const msgText: Record<Exclude<MsgKey, "">, string> = {
+    success: t.footer.newsletterSuccess,
+    alreadySignedUp: t.footer.newsletterAlreadySignedUp,
+    invalidEmail: t.footer.newsletterInvalidEmail,
+    error: t.footer.newsletterError,
+  };
 
   const handleNewsletterSignup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!email.includes("@") || !email.includes(".")) {
-      setMessage("Please enter a valid email address.");
+      setMsgKey("invalidEmail");
       return;
     }
     try {
       const { error } = await supabase.from("newslettersignup").insert({ email });
       if (error) {
-        setMessage(
-          error.code === "23505"
-            ? "This email is already signed up."
-            : "Something went wrong. Please try again."
-        );
+        setMsgKey(error.code === "23505" ? "alreadySignedUp" : "error");
       } else {
-        setMessage("Thank you for signing up!");
+        setMsgKey("success");
         setEmail("");
       }
     } catch {
-      setMessage("Something went wrong. Please try again.");
+      setMsgKey("error");
     }
   };
 
@@ -42,11 +46,10 @@ const Footer = () => {
           {/* Brand */}
           <div>
             <h3 className="text-2xl font-serif font-bold text-primary mb-3">
-              Little Loops
+              Natalie Winger
             </h3>
             <p className="text-muted-foreground text-sm leading-relaxed mb-5">
-              Handcrafted beaded jewellery made with love in Norway. Each piece is unique,
-              made one bead at a time.
+              {t.footer.tagline}
             </p>
             <a
               href="https://www.instagram.com/shoplittleloopsstudio"
@@ -62,14 +65,14 @@ const Footer = () => {
           {/* Navigation */}
           <div>
             <h4 className="font-semibold text-primary mb-4 text-sm uppercase tracking-wide">
-              Navigate
+              {t.footer.navigate}
             </h4>
             <nav className="space-y-2.5">
               {[
-                { to: "/", label: "Home" },
-                { to: "/store", label: "Shop" },
-                { to: "/about", label: "About" },
-                { to: "/profile", label: "My Account" },
+                { to: "/", label: t.footer.home },
+                { to: "/store", label: t.footer.shop },
+                { to: "/about", label: t.footer.about },
+                { to: "/profile", label: t.footer.myAccount },
               ].map(({ to, label }) => (
                 <Link
                   key={to}
@@ -85,15 +88,15 @@ const Footer = () => {
           {/* Newsletter */}
           <div>
             <h4 className="font-semibold text-primary mb-2 text-sm uppercase tracking-wide">
-              Stay in the Loop
+              {t.footer.stayInLoop}
             </h4>
             <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
-              New pieces, market dates, and restocks — straight to your inbox.
+              {t.footer.newsletterDesc}
             </p>
             <form onSubmit={handleNewsletterSignup} className="space-y-2">
               <input
                 type="email"
-                placeholder="Your email address"
+                placeholder={t.footer.emailPlaceholder}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -102,12 +105,12 @@ const Footer = () => {
                 type="submit"
                 className="w-full bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
               >
-                Subscribe
+                {t.footer.subscribe}
               </button>
             </form>
-            {message && (
+            {msgKey && (
               <p className={`mt-2 text-xs ${isError ? "text-red-600" : "text-primary"}`}>
-                {message}
+                {msgText[msgKey]}
               </p>
             )}
           </div>
@@ -116,9 +119,9 @@ const Footer = () => {
         {/* Bottom bar */}
         <div className="border-t border-border mt-12 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <p className="flex items-center gap-1.5">
-            Made with <Heart className="h-3.5 w-3.5 text-rose-400 fill-current" /> by Little Loops
+            {t.footer.madeWith} <Heart className="h-3.5 w-3.5 text-rose-400 fill-current" /> {t.footer.byLittleLoops}
           </p>
-          <p>© {new Date().getFullYear()} Little Loops. All rights reserved.</p>
+          <p>{t.footer.allRightsReserved(new Date().getFullYear())}</p>
         </div>
       </div>
     </footer>
